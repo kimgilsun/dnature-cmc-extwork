@@ -58,14 +58,14 @@ export default function MQTTDashboard() {
   const [messages, setMessages] = useState<{ topic: string; message: string; timestamp: string }[]>([])
 
   // MQTT 연결 상태 모니터링
-  useEffect(() => {
-    if (mqttState.client?.connected && !mqttState.isConnected) {
-      setMqttState((prev) => ({
-        ...prev,
-        isConnected: true,
-      }))
-    }
-  }, [mqttState.client?.connected, mqttState.isConnected]) // Added mqttState.isConnected to dependencies
+  // useEffect(() => {
+  //   if (mqttState.client?.connected && !mqttState.isConnected) {
+  //     setMqttState((prev) => ({
+  //       ...prev,
+  //       isConnected: true,
+  //     }))
+  //   }
+  // }, [mqttState.client?.connected, mqttState.isConnected]) // Added mqttState.isConnected to dependencies
 
   // MQTT 연결 설정 - 최초 마운트시에만 실행
   // useEffect(() => {
