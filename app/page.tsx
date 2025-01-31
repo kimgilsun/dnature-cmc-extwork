@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Tank } from "./components/tank"
+//import { Tank } from "./components/tank"
 import { getProcessMode } from "./utils/processMode"
 import { mqttStore } from "./store/mqttStore"
 
