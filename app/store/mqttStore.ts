@@ -1,7 +1,6 @@
 import mqtt from "mqtt"
 
 interface MQTTState {
-  //client: mqtt.Client | null
   client: mqtt.MqttClient | null
   isConnected: boolean
   connectionError: Error | null
@@ -25,12 +24,12 @@ export const mqttStore = {
   },
 
   actions: {
-    connect(clientState: MQTTState, setState: (updater: (prev: MQTTState) => MQTTState) => void) { // ✅ setState의 타입을 명확하게 지정하여 에러 해결
+    connect(clientState: MQTTState, setState: (updater: (prev: MQTTState) => MQTTState) => void) {
+      // ✅ setState의 타입을 명확하게 지정하여 에러 해결
 
       // 이미 연결된 클라이언트가 있다면 재사용
       if (clientState.client?.connected) {
-        //setState((prev: MQTTState) => ({
-          setState((prev) => ({  
+        setState((prev) => ({
           ...prev,
           isConnected: true,
         }))
@@ -42,7 +41,7 @@ export const mqttStore = {
         clientState.client.end(true)
       }
 
-      const mqttOptions = {
+      const mqttOptions: mqtt.IClientOptions = {
         clientId: `bhkim_${Date.now()}`,
         username: clientState.mqtt_user,
         password: clientState.mqtt_password,
@@ -57,18 +56,15 @@ export const mqttStore = {
       const client = mqtt.connect(clientState.mqtt_server, mqttOptions)
 
       // 연결 시도 중임을 표시
-      //setState((prev: MQTTState) => ({
-        setState((prev) => ({
-
-          ...prev,
+      setState((prev) => ({
+        ...prev,
         client,
         isConnected: false,
       }))
 
       client.on("connect", () => {
         console.log("MQTT Connected")
-        //setState((prev: MQTTState) => ({
-          setState((prev) => ({
+        setState((prev) => ({
           ...prev,
           client,
           isConnected: true,
@@ -84,8 +80,7 @@ export const mqttStore = {
 
       client.on("reconnect", () => {
         console.log("MQTT Reconnecting...")
-        //setState((prev: MQTTState) => ({
-          setState((prev) => ({  
+        setState((prev) => ({
           ...prev,
           isConnected: false,
         }))
@@ -93,8 +88,7 @@ export const mqttStore = {
 
       client.on("error", (err) => {
         console.error("MQTT Error:", err)
-        //setState((prev: MQTTState) => ({
-          setState((prev) => ({
+        setState((prev) => ({
           ...prev,
           connectionError: err,
           isConnected: false,
@@ -103,8 +97,7 @@ export const mqttStore = {
 
       client.on("close", () => {
         console.warn("MQTT connection closed")
-        //setState((prev: MQTTState) => ({
-          setState((prev) => ({
+        setState((prev) => ({
           ...prev,
           isConnected: false,
         }))
@@ -112,4 +105,3 @@ export const mqttStore = {
     },
   },
 }
-

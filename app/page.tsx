@@ -1,14 +1,11 @@
 "use client"
 
-import dynamic from "next/dynamic"
-const Tank = dynamic(() => import("./components/tank"), { ssr: false })
-
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-//import { Tank } from "./components/tank"
+import { Tank } from "./components/tank"
 import { getProcessMode } from "./utils/processMode"
 import { mqttStore } from "./store/mqttStore"
 
@@ -57,95 +54,11 @@ export default function MQTTDashboard() {
   const [currentPumpId, setCurrentPumpId] = useState<number | null>(null)
   const [messages, setMessages] = useState<{ topic: string; message: string; timestamp: string }[]>([])
 
-  // MQTT 연결 상태 모니터링
-  // useEffect(() => {
-  //   if (mqttState.client?.connected && !mqttState.isConnected) {
-  //     setMqttState((prev) => ({
-  //       ...prev,
-  //       isConnected: true,
-  //     }))
-  //   }
-  // }, [mqttState.client?.connected, mqttState.isConnected]) // Added mqttState.isConnected to dependencies
-
-  // MQTT 연결 설정 - 최초 마운트시에만 실행
-  // useEffect(() => {
-  //   mqttStore.actions.connect(mqttStore.state, setMqttState)
-
-  //   return () => {
-  //     if (mqttState.client) {
-  //       mqttState.client.end(true)
-  //     }
-  //   }
-  // }, [mqttStore, setMqttState]) // Added mqttStore and setMqttState to dependencies
-
-  // // 메시지 처리 로직
-  // const handleMessage = useCallback((topic: string, message: Buffer) => {
-  //   const messageStr = message.toString()
-
-  //   setMessages((prev) => {
-  //     return [
-  //       {
-  //         topic,
-  //         message: messageStr,
-  //         timestamp: new Date().toLocaleTimeString(),
-  //       },
-  //     ]
-  //   })
-
-  //   try {
-  //     if (topic === "extwork/t/process/progress") {
-  //       const processInfo: ProcessInfo = JSON.parse(messageStr)
-  //       const isWaiting = processInfo.process_info === "waiting"
-
-  //       setCurrentPumpId(isWaiting ? null : processInfo.pump_id)
-  //       setProcessState((prev) => ({
-  //         ...prev,
-  //         currentProcess: processInfo.process_info,
-  //         processMode: getProcessMode(processInfo.process_info),
-  //       }))
-
-  //       if (processInfo.pump_id && processInfo.pump_id >= 1 && processInfo.pump_id <= 6) {
-  //         const tankIndex = processInfo.pump_id - 1
-
-  //         // fillPercentage 계산 로직 수정
-  //         const fillPercentage = isWaiting
-  //           ? 0
-  //           : processInfo.elapsed_time && processInfo.remaining_time
-  //             ? (processInfo.elapsed_time / (processInfo.elapsed_time + processInfo.remaining_time)) * 100
-  //             : 0
-
-  //         setTankStates((prev) => {
-  //           const newStates = [...prev]
-  //           newStates[tankIndex] = {
-  //             fillPercentage: Math.min(fillPercentage, 100),
-  //             elapsedTime: processInfo.elapsed_time || 0,
-  //             remainingTime: processInfo.remaining_time,
-  //             isActive: !isWaiting,
-  //           }
-  //           return newStates
-  //         })
-  //       }
-  //     } else if (topic === "extwork/valve/state") {
-  //       const valveAMatch = messageStr.match(/valveA=(\w+)$$([\p{L}_]+)$$/u)
-  //       const valveBMatch = messageStr.match(/valveB=(\w+)$$([\p{L}_]+)$$/u)
-
-  //       if (valveAMatch && valveBMatch) {
-  //         setProcessState((prev) => ({
-  //           ...prev,
-  //           circulationMode: valveAMatch[2],
-  //           tankConnection: valveBMatch[2],
-  //         }))
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error("Error parsing message:", error)
-  //   }
-  // }, [])
-
-
-  // MQTT 연결 상태 모니터링
+// MQTT 연결 상태 모니터링
 useEffect(() => {
+  // 클라이언트가 연결되어 있고, 현재 연결 상태가 false일 때
   if (mqttState.client?.connected && !mqttState.isConnected) {
+    // 연결 상태를 true로 업데이트
     setMqttState((prevState) => ({
       ...prevState,
       isConnected: true,
@@ -155,14 +68,18 @@ useEffect(() => {
 
 // MQTT 연결 설정 - 최초 마운트시에만 실행
 useEffect(() => {
-  mqttStore.actions.connect(mqttState, setMqttState) // ✅ mqttStore.state → mqttState로 변경 (리렌더링 반영)
+  // 클라이언트가 없을 때만 연결 시도
+  if (!mqttState.client) { // ✅ 클라이언트가 없을 때만 연결을 시도하도록 수정
+  mqttStore.actions.connect(mqttState, setMqttState); // ✅ mqttStore.state → mqttState로 변경 (리렌더링 반영)
+  }
   
   return () => {
+    // 컴포넌트가 언마운트될 때 클라이언트 종료
     if (mqttState.client) {
-      mqttState.client.end(true)
+      mqttState.client.end(true); // 클라이언트 연결 종료
     }
-  }
-}, [mqttState.client]) // ✅ mqttState.client를 의존성 배열에 추가, mqttStore 제거
+  };
+}, [mqttState.client]); // ✅ mqttState 의존성 배열에 추가, mqttStore 제거
 
 // 메시지 처리 로직
 const handleMessage = useCallback((topic: string, message: Buffer) => {

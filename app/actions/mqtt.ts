@@ -1,8 +1,9 @@
 "use server"
 
-import mqtt from "mqtt"
+import mqtt from "mqtt"; // mqtt 전체를 import
 
-let client: mqtt.Client | null = null
+let client: mqtt.MqttClient | null = null; // MqttClient 타입으로 수정
+
 
 export async function connectMQTT() {
   if (!client) {

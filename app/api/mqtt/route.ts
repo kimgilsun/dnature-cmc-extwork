@@ -1,4 +1,5 @@
 import { WebSocketServer } from "ws"
+import { NextResponse } from "next/server";
 import mqtt from "mqtt"
 
 const wss = new WebSocketServer({ port: 3000 })
@@ -22,7 +23,7 @@ mqttClient.on("message", (topic, message) => {
   })
 })
 
-export default function handler() {
-  return new Response("WebSocket server is running")
+export async function GET() {
+  return NextResponse.json({ status: "MQTT Connected" });
 }
 

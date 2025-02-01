@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev & node server/websocket.js",
     "build": "next build",
-    "start": "next start",
+    "start": "next start & node server/websocket.js",
     "lint": "next lint"
   },
   "dependencies": {
@@ -19,7 +19,8 @@
     "react-dom": "^18",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@types/node": "^20",
