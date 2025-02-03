@@ -62,9 +62,10 @@ useEffect(() => {
     setMqttState((prevState) => ({
       ...prevState,
       isConnected: true,
-    }))
+    }));
   }
-}, [mqttState.client?.connected, mqttState.isConnected]) // ✅ mqttState.client?.connected를 명시적으로 추가
+}, [mqttState.client, mqttState.isConnected]); // ✅  연결상태 모니터링만 , mqttState.isConnected 의존성 배열에 추가
+
 
 // MQTT 연결 설정 - 최초 마운트시에만 실행
 useEffect(() => {
@@ -79,71 +80,83 @@ useEffect(() => {
       mqttState.client.end(true); // 클라이언트 연결 종료
     }
   };
-}, [mqttState.client]); // ✅ mqttState 의존성 배열에 추가, mqttStore 제거
+}, [mqttState.client]); // ✅ 의존성 배열 추가(, mqttState를 추가하면 disconnected)
 
 // 메시지 처리 로직
 const handleMessage = useCallback((topic: string, message: Buffer) => {
-  const messageStr = message.toString()
-
+  console.log("📩 메시지 수신:", topic, message.toString()); // 추가
+  const messageStr = message.toString();
+ 
+  // 모든 메시지를 상태에 추가하여 최신순으로 업데이트
   setMessages((currentMessages) => [
     {
-      topic,
-      message: messageStr,
-      timestamp: new Date().toLocaleTimeString(),
+      topic, // 메세지의 토픽
+      message: messageStr, //변환된 메시지 문자열
+      timestamp: new Date().toLocaleTimeString(), // 현제 시간
     },
-    ...currentMessages,
-  ])
+    ...currentMessages, // 기존 메시지 목록을 포함
+  ]);
+
 
   try {
+    // 특정 토픽에 대한 처리
     if (topic === "extwork/t/process/progress") {
-      const processInfo: ProcessInfo = JSON.parse(messageStr)
-      const isWaiting = processInfo.process_info === "waiting"
+      const processInfo: ProcessInfo = JSON.parse(messageStr); // 메시지를 JSON으로 파싱
+      const isWaiting = processInfo.process_info === "waiting"; // 공정 상태 확인
 
-      setCurrentPumpId(isWaiting ? null : processInfo.pump_id)
+      // 현재 펌프 ID 업데이트
+      setCurrentPumpId(isWaiting ? null : processInfo.pump_id);
+
+      // 공정 상태 업데이트
       setProcessState((currentState) => ({
         ...currentState,
-        currentProcess: processInfo.process_info,
-        processMode: getProcessMode(processInfo.process_info),
-      }))
+        currentProcess: processInfo.process_info, // 현재 공정 정보 업데이트
+        processMode: getProcessMode(processInfo.process_info), // 공정 모드 업데이트
+      }));
 
+      // 펌프 ID가 1에서 6 사이일 때 상태 업데이트
       if (processInfo.pump_id && processInfo.pump_id >= 1 && processInfo.pump_id <= 6) {
-        const tankIndex = processInfo.pump_id - 1
+        const tankIndex = processInfo.pump_id - 1; // 탱크 인덱스 계산
 
+        // 채워진 비율 계산
         const fillPercentage = isWaiting
           ? 0
           : processInfo.elapsed_time && processInfo.remaining_time
             ? (processInfo.elapsed_time / (processInfo.elapsed_time + processInfo.remaining_time)) * 100
-            : 0
+            : 0;
 
+        // 탱크 상태 업데이트    
         setTankStates((currentStates) => {
-          const newStates = [...currentStates]
+          const newStates = [...currentStates]; // 현재 상태 복사
           newStates[tankIndex] = {
-            fillPercentage: Math.min(fillPercentage, 100),
-            elapsedTime: processInfo.elapsed_time || 0,
-            remainingTime: processInfo.remaining_time,
-            isActive: !isWaiting,
-          }
-          return newStates
-        })
+            fillPercentage: Math.min(fillPercentage, 100), // 최대 100%로 제한
+            elapsedTime: processInfo.elapsed_time || 0, // 경과 시간
+            remainingTime: processInfo.remaining_time, // 남은 시간
+            isActive: !isWaiting, // 대기 상태 여부
+          };
+          return newStates // 새로운 상태 반환
+        });
       }
     }
   } catch (error) {
-    console.error("Error parsing message:", error)
+    console.error("Error parsing message:", error); // 메시지 파싱 오류 처리
   }
-}, [])
+}, [setMessages, setCurrentPumpId, setProcessState, setTankStates]); // 필요한 상태 업데이트 함수 추가
 
 
   // 메시지 핸들러 설정
   useEffect(() => {
-    const client = mqttState.client
-    if (!client) return
-
-    client.on("message", handleMessage)
-
+    const client = mqttState.client;
+    if (!client) return;
+    
+    // 메시지 핸들러 등록 
+    client.on("message", handleMessage);
+   
+    // 클린업 함수: 컴포넌트 언마운트 시 핸들러 제거
     return () => {
-      client.removeListener("message", handleMessage)
-    }
-  }, [mqttState.client, handleMessage])
+      client.removeListener("message", handleMessage);
+    };
+  }, [mqttState.client, handleMessage]); // mqttState.client을 의존성 배열에 추가
 
   const handlePublish = async () => {
     if (topic && message && mqttState.client) {
@@ -215,11 +228,11 @@ const handleMessage = useCallback((topic: string, message: Buffer) => {
                 {messages.length > 0 && (
                   <div className="bg-secondary p-1.5 rounded-md text-[11px]">
                     <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>{messages[messages.length - 1].topic}</span>
-                      <span>{messages[messages.length - 1].timestamp}</span>
+                      <span>{messages[0].topic}</span> {/* 변경 부분 */}
+                      <span>{messages[0].timestamp}</span> {/* 변경 부분 */}
                     </div>
                     <div className="mt-0.5 break-all whitespace-pre-wrap leading-tight">
-                      {messages[messages.length - 1].message}
+                      {messages[0].message} {/* 변경 부분 */}
                     </div>
                   </div>
                 )}
@@ -227,7 +240,7 @@ const handleMessage = useCallback((topic: string, message: Buffer) => {
               <div className="w-[200px] space-y-2">
                 <label className="text-sm font-medium">연결 상태</label>
                 <div
-                  className={`p-2 rounded-md ${
+                  className={`p-1 rounded-sm w-16 ${ // className={`p-2 rounded-md ${
                     mqttState.isConnected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                   }`}
                 >
