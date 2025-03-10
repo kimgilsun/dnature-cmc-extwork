@@ -72,7 +72,7 @@ export const mqttStore = {
         }))
 
         // 토픽 구독
-        const topics = ["extwork/t/process/progress", "extwork/valve/state"]
+        const topics = ["extwork/process/progress", "extwork/valve/state"]
         topics.forEach((topic) => {
           client.subscribe(topic)
         })
