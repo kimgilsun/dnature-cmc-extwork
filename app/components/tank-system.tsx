@@ -498,4 +498,4 @@ export default function TankSystem({ tankData, onValveChange }: TankSystemProps)
       </div>
     </div>
   )
-} 
+} // 펌프 위치 수정 - 2025년 3월 12일 수요일 03시 34분 20초 KST
