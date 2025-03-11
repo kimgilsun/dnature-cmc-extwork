@@ -37,6 +37,9 @@ export default function Dashboard() {
   const [progressStatus, setProgressStatus] = useState<"connected" | "disconnected">("disconnected")
   const [lastErrors, setLastErrors] = useState<string[]>([])
   
+  // 추출 진행 메시지를 저장할 상태
+  const [progressMessages, setProgressMessages] = useState<Array<{timestamp: number, message: string}>>([])
+  
   // 기본 탱크 시스템 데이터로 초기화 (6개 탱크)
   const [tankData, setTankData] = useState<TankSystemData>(getDefaultTankSystemData(6))
 
@@ -174,6 +177,16 @@ export default function Dashboard() {
     if (topic === PROCESS_PROGRESS_TOPIC) {
       setProgressData(message)
       setProgressStatus("connected")
+      
+      // 추출 진행 메시지 추가
+      setProgressMessages(prev => {
+        const newMessages = [
+          { timestamp: Date.now(), message },
+          ...prev
+        ].slice(0, 2) // 최신 2개만 유지
+        return newMessages
+      })
+      
       return
     }
     
@@ -264,14 +277,18 @@ export default function Dashboard() {
                     key={tank.id} 
                     variant={tank.pumpStatus === "ON" ? "default" : "outline"}
                     onClick={() => togglePump(tank.id, tank.pumpStatus === "ON" ? "OFF" : "ON")}
-                    size="sm"
+                    size="sm" 
                     className="text-xs"
                   >
                     펌프 {tank.id}: {tank.pumpStatus}
                   </Button>
                 ))}
               </div>
-              <TankSystem tankData={tankData} onValveChange={changeValveState} />
+              <TankSystem 
+                tankData={tankData} 
+                onValveChange={changeValveState}
+                progressMessages={progressMessages}
+              />
             </CardContent>
           </Card>
         </TabsContent>
