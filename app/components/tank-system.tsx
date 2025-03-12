@@ -1565,20 +1565,21 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* K 스위치 - 1번 탱크 우측 상단으로 이동 */}
+                {/* K 스위치 - 1번 탱크 앞쪽으로 이동, 우측 및 아래로 조정 */}
                 <g 
                   className="cursor-pointer"
                   onClick={() => onPumpKCommand && onPumpKCommand(1)}
+                  style={{ zIndex: 50 }}
                 >
                   <circle
-                    cx={tankPositions[0].x + 50}
-                    cy={tankPositions[0].y - 50}
+                    cx={tankPositions[0].x + 60}
+                    cy={tankPositions[0].y + 30}
                     r={15}
                     className="fill-blue-100 stroke-blue-300 stroke-2"
                   />
                   <text
-                    x={tankPositions[0].x + 50}
-                    y={tankPositions[0].y - 46}
+                    x={tankPositions[0].x + 60}
+                    y={tankPositions[0].y + 34}
                     textAnchor="middle"
                     className="text-blue-500 font-bold text-sm"
                   >
@@ -1928,7 +1929,7 @@ export default function TankSystem({
           </g>
 
           {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정하여 나란히 배치 */}
-          <g transform={`translate(${tankPositions[4].x - 250}, ${tankPositions[4].y})`}>
+          <g transform={`translate(${tankPositions[4].x - 280}, ${tankPositions[4].y})`}>
             {/* 추출 제어 상자 */}
             <rect
               x="-60"
@@ -2043,8 +2044,8 @@ export default function TankSystem({
               </text>
             </g>
             
-            {/* 펌프 리셋 버튼 상자 - 추출 제어 상자 우측에 배치 */}
-            <g transform="translate(140, 0)">
+            {/* 펌프 리셋 버튼 상자 - 추출 제어 상자 우측에 배치, 약간 왼쪽으로 이동 */}
+            <g transform="translate(130, 0)">
               <rect
                 x="-60"
                 y="-130"
