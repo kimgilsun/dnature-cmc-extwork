@@ -1099,7 +1099,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(1, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
+                  1
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1203,7 +1203,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(2, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
+                  2
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1292,7 +1292,7 @@ export default function TankSystem({
                     onTouchStart={(e) => handlePumpSwitchStart(pumpNum, e)}
                   />
                   <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                    {tank.pumpStatus}
+                    {pumpNum}
                   </text>
                   
                   {/* 펌프 스위치 표시 */}
