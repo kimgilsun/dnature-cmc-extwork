@@ -120,6 +120,7 @@ export default function MqttControlPage() {
   // 명령 미리보기 생성
   useEffect(() => {
     generateCommandPreview();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pumpStatus, selectedMode, pumpRunTime, waitTime, individualRepeat, totalRepeat]);
 
   // 명령 미리보기 생성 함수
