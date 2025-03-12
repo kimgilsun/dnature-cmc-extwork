@@ -360,7 +360,7 @@ export default function MqttControlPage() {
         {/* 명령 미리보기 */}
         <div className="bg-white p-4 rounded shadow">
           <h2 className="text-xl mb-2">JSON 명령 미리보기</h2>
-          <p className="text-sm text-gray-600 mb-2">"extwork/extraction/input" 토픽으로 발송될 명령입니다</p>
+          <p className="text-sm text-gray-600 mb-2">&quot;extwork/extraction/input&quot; 토픽으로 발송될 명령입니다</p>
           <pre className="bg-gray-100 p-4 rounded overflow-auto max-h-[300px] text-sm">
             {commandPreview}
           </pre>
