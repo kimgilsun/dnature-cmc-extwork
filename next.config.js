@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  // 서버 렌더링 비활성화 설정 추가
+  experimental: {
+    // 페이지마다 라우팅 핸들링을 클라이언트 측으로 이동
+    appDir: true,
+  },
+  // 출력 옵션 추가
+  output: 'export', // SSG(정적 생성) 사용
   // WebSocket 연결을 위한 CORS 설정 추가
   async headers() {
     return [
@@ -19,6 +26,7 @@ const nextConfig = {
   // 외부 URL로의 이미지 요청 허용
   images: {
     domains: ['api.codingpen.com'],
+    unoptimized: true, // 정적 내보내기에 필요
   },
   // webpack 설정 추가 (필요한 경우)
   webpack: (config, { isServer }) => {
