@@ -1,6 +1,6 @@
 "use client"
 import { motion } from "framer-motion"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 // import { MqttClient } from "mqtt" - 클라이언트 측에서 사용할 수 없음
 import { cn } from '@/lib/utils';
 import "./tank-system.css"; // 새로 생성한 CSS 파일 import
@@ -509,31 +509,34 @@ export default function TankSystem({
     if (!mqttClient) return;
     
     const handleMessage = (topic: string, message: Buffer) => {
-      const messageStr = message.toString();
-      console.log(`메시지 수신: ${topic} - ${messageStr}`);
-      
       try {
-        // 토픽에 따른 처리
+        // 메시지를 문자열로 변환
+        const messageStr = message.toString();
+        
+        // 알림 토픽 메시지 처리
         if (topic === 'tank-system/notifications') {
-          const notification = JSON.parse(messageStr);
-          
-          // 자신이 발생시킨 알림이 아닌 경우에만 처리
-          if (notification.clientId !== clientId.current) {
-            setNotifications(prev => [
-              ...prev,
-              {
-                message: notification.message,
-                timestamp: notification.timestamp,
-                source: notification.clientId
-              }
-            ]);
+          try {
+            const notification = JSON.parse(messageStr);
             
-            // 5초 후 알림 제거
-            setTimeout(() => {
-              setNotifications(prev => 
-                prev.filter(n => n.timestamp !== notification.timestamp)
-              );
-            }, 5000);
+            // 자신이 발행한 알림은 무시
+            if (notification.clientId === clientId.current) {
+              return;
+            }
+            
+            // 알림 추가
+            setNotifications(prev => {
+              const newNotifications = [...prev, {
+                id: Date.now(),
+                message: notification.message || '새 알림',
+                type: notification.type || 'info',
+                timestamp: notification.timestamp || Date.now()
+              }];
+              
+              // 최대 5개 알림만 유지
+              return newNotifications.slice(-5);
+            });
+          } catch (error) {
+            console.error('알림 메시지 파싱 오류:', error);
           }
         } else if (topic === 'tank-system/state') {
           // 전체 시스템 상태 업데이트
@@ -580,10 +583,7 @@ export default function TankSystem({
           }
         }
         
-        // 상태 변경 시 로컬에 저장
-        if (tankData) {
-          saveSystemState(tankData);
-        }
+        // 여기에 있던 매 메시지마다 저장하는 코드 제거
       } catch (error) {
         console.error('메시지 처리 오류:', error);
       }
@@ -814,7 +814,7 @@ export default function TankSystem({
   };
   
   // 밸브 상태 변경 핸들러 - MQTT 알림 추가
-  const handleValveChange = (newState: string) => {
+  const handleValveChange = useCallback((newState: string) => {
     // 상태 변경 요청
     onValveChange(newState);
     
@@ -834,12 +834,8 @@ export default function TankSystem({
     // 상태 변경 시간 업데이트
     setLastStateUpdate(new Date());
     
-    // 상태 저장
-    saveSystemState({
-      ...tankData,
-      valveState: newState
-    });
-  };
+    // 직접 상태 저장 제거 - 부모 컴포넌트가 onValveChange를 통해 처리
+  }, [mqttClient, onValveChange, clientId]);
   
   // 펌프 버튼 마우스 다운 핸들러 - MQTT 알림 추가
   const handlePumpMouseDown = (pumpId: number) => {
@@ -1950,7 +1946,10 @@ export default function TankSystem({
 
           {/* 3way 밸브 - ON/OFF 스위치 형태로 개선 - 크기 줄임 */}
           <g
-            onClick={() => handleValveChange(getNextValveState())}
+            onClick={() => {
+              const nextState = getNextValveState();
+              handleValveChange(nextState);
+            }}
             className="cursor-pointer"
             transform={`translate(${valve3wayPosition.x}, ${valve3wayPosition.y})`}
           >
