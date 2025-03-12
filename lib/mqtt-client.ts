@@ -75,23 +75,12 @@ class MqttClient {
         // WebSocket 전송 옵션 추가
         transformWsUrl: (url, options, client) => {
           console.log("WebSocket 원본 URL:", url);
-          
-          // Vercel 환경에서 추가 설정
-          if (isVercelEnv) {
-            // 명시적으로 URL을 지정
-            url = "wss://api.codingpen.com:8884/mqtt";
-            console.log("Vercel 환경: WebSocket URL 변환됨:", url);
-          }
-          
           return url;
         },
       };
 
-      // MQTT 브로커에 연결 (호스트 이름 직접 지정)
-      // Vercel 환경인 경우 wss:// 프로토콜 사용
-      const brokerUrl = isVercelEnv 
-        ? "wss://api.codingpen.com:8884/mqtt" 
-        : "wss://api.codingpen.com:8884/mqtt";
+      // 환경 변수에서 MQTT 브로커 URL 가져오기
+      let brokerUrl = process.env.NEXT_PUBLIC_MQTT_BROKER_URL || "wss://api.codingpen.com:8884/mqtt";
       
       console.log(`연결 시도 URL: ${brokerUrl}`);
       
