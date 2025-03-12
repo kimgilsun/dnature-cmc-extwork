@@ -462,7 +462,7 @@ export default function TankSystem({
     return `M ${startX} ${startY} H ${valve3wayPosition.x - 30}`;
   }
 
-  // 3way 밸브(밸브2)에서 본탱크로의 경로 (직선 연결) 수정
+  // 3way 밸브(밸브2)에서 본탱크로의 경로 - 전체순환일 때만 표시
   const calculate3wayToMainPath = () => {
     // 밸브2에서 본탱크 왼쪽 가장자리까지 직선 연결
     const tankLeft = mainTankPosition.x - mainTankPosition.width / 2;
@@ -474,7 +474,7 @@ export default function TankSystem({
             L ${tankLeft + 20} ${tankMid}`;
   }
 
-  // 본탱크에서 2way 밸브(밸브1)로의 경로 (직각으로 조정) - 더 짧게 수정하되 보이도록
+  // 본탱크에서 2way 밸브(밸브1)로의 경로 - 항상 표시
   const calculateMainToTank1Path = () => {
     // 본탱크 위쪽 가장자리에서 시작하여 2way 밸브까지 수직 연결 - 짧게 하되 보이도록
     const tankEdgeY = mainTankPosition.y - mainTankPosition.height / 2;
@@ -483,7 +483,7 @@ export default function TankSystem({
     return `M ${mainTankPosition.x} ${tankEdgeY} V ${tankEdgeY - lineLength}`;
   }
 
-  // 2way 밸브(밸브1)에서 펌프1 입구 쪽으로의 경로
+  // 2way 밸브(밸브1)에서 펌프1 입구 쪽으로의 경로 - 항상 표시
   const calculate2wayToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     
@@ -493,7 +493,7 @@ export default function TankSystem({
             L ${pump1Pos.x} ${pump1Pos.y}`;
   }
 
-  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 거의 펌프에 닿도록 연장
+  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 추출순환일 때만 표시
   const calculate3wayToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     
@@ -672,13 +672,15 @@ export default function TankSystem({
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브(밸브2)에서 본탱크로의 경로 - 항상 표시 */}
-        <path
-          d={calculate3wayToMainPath()}
-          className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
-          fill="none"
-          strokeLinecap="round"
-        />
+        {/* 3way 밸브(밸브2)에서 본탱크로의 경로 - 전체순환일 때만 표시 */}
+        {valve1 === 0 && (
+          <path
+            d={calculate3wayToMainPath()}
+            className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )}
 
         {/* 본탱크에서 2way 밸브(밸브1)로의 경로 - 항상 표시 */}
         <path
@@ -696,13 +698,15 @@ export default function TankSystem({
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브(밸브2)에서 펌프 1로의 경로 - 거의 펌프에 닿도록 연장 */}
-        <path
-          d={calculate3wayToPump1Path()}
-          className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
-          fill="none"
-          strokeLinecap="round"
-        />
+        {/* 3way 밸브(밸브2)에서 펌프 1로의 경로 - 추출순환일 때만 표시 */}
+        {valve1 === 1 && (
+          <path
+            d={calculate3wayToPump1Path()}
+            className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )}
 
         {/* 합류 지점에서 펌프1로의 경로 */}
         <path
