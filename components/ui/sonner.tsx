@@ -1,12 +1,12 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner } from "sonner"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  // 하드코딩된 테마를 사용하여 next-themes 의존성 제거
+  const theme = "system";
 
   return (
     <Sonner
