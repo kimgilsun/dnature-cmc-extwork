@@ -1472,44 +1472,6 @@ export default function TankSystem({
                     />
                   )}
                   
-                  {/* 리셋 버튼 추가 - 펌프 "OFF" 텍스트 옆에 배치 */}
-                  <g 
-                    className="cursor-pointer"
-                    onClick={() => {
-                      if (onPumpReset) {
-                        onPumpReset(pumpNum);
-                        // MQTT 메시지 발행
-                        if (mqttClient) {
-                          mqttClient.publish(`extwork/inverter${pumpNum}/command`, "reset");
-                          // 알림 발행
-                          const notification = {
-                            type: 'pump-reset',
-                            pumpId: pumpNum,
-                            timestamp: Date.now(),
-                            clientId: clientId.current,
-                            message: `펌프 ${pumpNum} 리셋 명령이 실행되었습니다.`
-                          };
-                          mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                        }
-                      }
-                    }}
-                  >
-                    <circle
-                      cx={pumpPos.x + 45}
-                      cy={pumpPos.y}
-                      r={15}
-                      className="fill-red-100 stroke-red-500 stroke-2"
-                    />
-                    <text
-                      x={pumpPos.x + 45}
-                      y={pumpPos.y + 4}
-                      textAnchor="middle"
-                      className="text-red-600 font-bold text-sm"
-                    >
-                      R
-                    </text>
-                  </g>
-                  
                   {/* 상태 메시지 표시 */}
                   {stateMessage && (
                     <g>
