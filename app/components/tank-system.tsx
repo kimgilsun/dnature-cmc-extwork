@@ -804,34 +804,30 @@ export default function TankSystem({
             {valve1 === 1 ? "ON" : "OFF"}
           </text>
           <text x="0" y="50" textAnchor="middle" className="text-[10px] text-gray-700">
-            {valve1 === 1 ? "추출순환" : valve1Desc || "전체순환"}
+            {valve1 === 1 ? valve1Desc || "추출순환" : "전체순환"}
           </text>
         </g>
 
-        {/* 2way 밸브 - ON/OFF 스위치 형태로 개선 */}
-        <g
-          onClick={() => onValveChange(getNextValveState())}
-          className="cursor-pointer"
-          transform={`translate(${valve2Position.x}, ${valve2Position.y})`}
-        >
-          {/* 밸브 배경 */}
+        {/* 2way 밸브 */}
+        <g transform={`translate(${valve2Position.x}, ${valve2Position.y})`}>
+          {/* 밸브 배경 - 높이를 줄임 */}
           <rect 
             x="-30" 
-            y="-40" 
+            y="-30" 
             width="60" 
-            height="80" 
+            height="50" 
             rx="10" 
             className={`fill-yellow-50 stroke-yellow-400 stroke-2`} 
           />
           
           {/* 밸브 내부 표시 */}
           <line x1="-20" y1="0" x2="20" y2="0" className="stroke-yellow-500 stroke-2" />
-          {valve2 === 1 && <line x1="0" y1="-20" x2="0" y2="20" className="stroke-yellow-500 stroke-2" />}
+          {valve2 === 1 && <line x1="0" y1="-15" x2="0" y2="15" className="stroke-yellow-500 stroke-2" />}
           
           {/* ON/OFF 스위치 */}
           <rect 
             x="-20" 
-            y={valve2 === 1 ? "-25" : "5"} 
+            y={valve2 === 1 ? "-20" : "0"} 
             width="40" 
             height="20" 
             rx="10" 
@@ -839,106 +835,16 @@ export default function TankSystem({
           />
           
           {/* 밸브 텍스트 */}
-          <text x="0" y="-30" textAnchor="middle" className="text-xs font-bold">
+          <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
             2way 밸브
           </text>
-          <text x="0" y={valve2 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
+          <text x="0" y={valve2 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve2 === 1 ? "ON" : "OFF"}
           </text>
-          <text x="0" y="50" textAnchor="middle" className="text-[10px] text-gray-700">
+          <text x="0" y="30" textAnchor="middle" className="text-[10px] text-gray-700">
             {valve2 === 1 ? valve2Desc || "본탱크개방" : "닫힘"}
           </text>
         </g>
-
-        {/* 범례 */}
-        <g className="text-xs">
-          <rect x="720" y="700" width="250" height="150" className="fill-white stroke-gray-300 stroke-1 rounded" />
-          <text x="730" y="720" className="font-bold">범례:</text>
-          
-          <rect x="730" y="730" width="15" height="15" className="fill-white stroke-gray-500 stroke-[4]" />
-          <text x="755" y="743">비어있음</text>
-          
-          <rect x="730" y="755" width="15" height="15" className="fill-amber-50 stroke-amber-400 stroke-[3]" />
-          <rect x="730" y="755" width="15" height="7" className="fill-amber-200/30" />
-          <text x="755" y="768">채워지는 중</text>
-          
-          <rect x="730" y="780" width="15" height="15" className="fill-white stroke-red-500 stroke-[4]" />
-          <text x="755" y="793">가득 채워짐</text>
-          
-          <circle cx="737" cy="813" r="7.5" className="fill-blue-300 stroke-gray-400 stroke-1" />
-          <text x="755" y="818">펌프 ON</text>
-          
-          <circle cx="737" cy="838" r="7.5" className="fill-gray-200 stroke-gray-400 stroke-1" />
-          <text x="755" y="843">펌프 OFF</text>
-        </g>
-
-        {/* 펌프 (3~6번) - 탱크 사이에 배치 */}
-        {Array(4)
-          .fill(0)
-          .map((_, index) => {
-            const currentTankIndex = index + 1 // 2, 3, 4, 5번 탱크부터 시작
-            const nextTankIndex = (currentTankIndex + 1) % 6 // 3, 4, 5, 6번 탱크
-            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
-            const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
-            const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
-            const stateMessage = pumpStateMessages[pumpNum] || '';
-            
-            return (
-              <g key={`pump-${pumpNum}`}>
-                {/* 인버터 펌프 */}
-                <circle
-                  cx={pumpPos.x}
-                  cy={pumpPos.y}
-                  r={pumpRadius}
-                  className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
-                  fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                  onMouseDown={() => onPumpToggle && handlePumpMouseDown(pumpNum)}
-                  onMouseUp={() => onPumpToggle && handlePumpMouseUp(pumpNum)}
-                  onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
-                  onTouchStart={() => onPumpToggle && handlePumpTouchStart(pumpNum)}
-                  onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(pumpNum)}
-                  onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
-                />
-                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                  IP_{pumpNum}
-                </text>
-                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
-                </text>
-                
-                {/* 상태 메시지 표시 */}
-                {stateMessage && (
-                  <g>
-                    <rect
-                      x={pumpPos.x - 50}
-                      y={pumpPos.y + 25}
-                      width={100}
-                      height={20}
-                      rx="3"
-                      className="fill-gray-100 stroke-gray-300 stroke-1"
-                    />
-                    <text
-                      x={pumpPos.x}
-                      y={pumpPos.y + 38}
-                      textAnchor="middle"
-                      className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
-                    >
-                      {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
-                    </text>
-                  </g>
-                )}
-                
-                {currentPressedPump === pumpNum && (
-                  <circle
-                    cx={pumpPos.x}
-                    cy={pumpPos.y}
-                    r={pumpRadius + 5}
-                    className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
-                  />
-                )}
-              </g>
-            )
-          })}
 
         {/* 1번 펌프 (6번과 1번 탱크 사이) */}
         {(() => {
@@ -968,20 +874,20 @@ export default function TankSystem({
                 {tank.pumpStatus}
               </text>
               
-              {/* K 스위치 추가 */}
+              {/* K 스위치 위치 변경 - 펌프 왼쪽 위로 이동 */}
               <g 
                 className="cursor-pointer"
                 onClick={() => onPumpKCommand && onPumpKCommand(1)}
               >
                 <circle
-                  cx={pumpPos.x - 40}
-                  cy={pumpPos.y}
+                  cx={pumpPos.x - 30}
+                  cy={pumpPos.y - 30}
                   r={12}
                   className="fill-white stroke-blue-500 stroke-2"
                 />
                 <text
-                  x={pumpPos.x - 40}
-                  y={pumpPos.y + 4}
+                  x={pumpPos.x - 30}
+                  y={pumpPos.y - 26}
                   textAnchor="middle"
                   className="text-blue-600 font-bold text-sm"
                 >
