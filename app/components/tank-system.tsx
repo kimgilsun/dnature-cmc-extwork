@@ -136,6 +136,9 @@ export default function TankSystem({
   const [pumpSwitchPosition, setPumpSwitchPosition] = useState<Record<number, number>>({});
   const [draggingPump, setDraggingPump] = useState<number | null>(null);
   const [resetTimers, setResetTimers] = useState<Record<number, NodeJS.Timeout | null>>({});
+  const [resetSwitchPosition, setResetSwitchPosition] = useState<Record<number, number>>({});
+  // 펌프 리셋 드래그 상태 추가
+  const [resetDragState, setResetDragState] = useState<Record<number, { dragging: boolean, position: number, timer: NodeJS.Timeout | null }>>({});
   
   // MQTT 클라이언트 연결 상태 모니터링
   useEffect(() => {
@@ -238,14 +241,154 @@ export default function TankSystem({
     };
   }, [mqttClient, tankData]);
   
-  // 컴포넌트 마운트 시 저장된 상태 복원
-  useEffect(() => {
-    const savedState = loadSystemState();
-    if (savedState && savedState.timestamp) {
-      // 마지막 저장 시간 표시
-      setLastStateUpdate(new Date(savedState.timestamp));
+  // 리셋 드래그 시작
+  const handleResetDragStart = (pumpId: number, e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setResetDragState(prev => ({
+      ...prev,
+      [pumpId]: { 
+        dragging: true, 
+        position: 0, 
+        timer: null 
+      }
+    }));
+    
+    document.addEventListener('mousemove', (e) => handleResetDragMove(e, pumpId));
+    document.addEventListener('touchmove', (e) => handleResetDragMove(e, pumpId));
+    document.addEventListener('mouseup', () => handleResetDragEnd(pumpId));
+    document.addEventListener('touchend', () => handleResetDragEnd(pumpId));
+  };
+  
+  // 리셋 드래그 이동
+  const handleResetDragMove = (e: MouseEvent | TouchEvent, pumpId: number) => {
+    if (!resetDragState[pumpId]?.dragging) return;
+    
+    // 마우스 또는 터치 X 좌표
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    
+    // 리셋 버튼 요소의 위치 구하기
+    const resetButton = document.getElementById(`reset-btn-${pumpId}`);
+    if (!resetButton) return;
+    
+    const rect = resetButton.getBoundingClientRect();
+    const buttonWidth = rect.width;
+    const maxDrag = 50; // 최대 드래그 거리
+    
+    // 드래그 위치 계산 (0~1 사이 값)
+    const dragStartX = rect.left + buttonWidth / 2; // 버튼 중앙
+    const dragDistance = Math.max(0, Math.min(maxDrag, clientX - dragStartX)); // 0 ~ maxDrag
+    const position = dragDistance / maxDrag; // 0 ~ 1
+    
+    setResetDragState(prev => {
+      const currentState = prev[pumpId] || { dragging: true, position: 0, timer: null };
+      
+      // 이미 타이머가 있고, 위치가 0.8(80%) 이상이면 타이머 유지
+      if (currentState.timer && position >= 0.8) {
+        return prev;
+      }
+      
+      // 타이머가 있지만 위치가 0.8 미만이면 타이머 취소
+      if (currentState.timer && position < 0.8) {
+        clearTimeout(currentState.timer);
+        return {
+          ...prev,
+          [pumpId]: { 
+            ...currentState,
+            position,
+            timer: null
+          }
+        };
+      }
+      
+      // 타이머가 없고 위치가 0.8 이상이면 타이머 시작
+      if (!currentState.timer && position >= 0.8) {
+        const timer = setTimeout(() => {
+          console.log(`펌프 ${pumpId} 리셋 명령 실행 (2초 후)`);
+          if (onPumpReset) {
+            onPumpReset(pumpId);
+            
+            if (mqttClient) {
+              const pumpTopic = `extwork/pump${pumpId}/cmd`;
+              mqttClient.publish(pumpTopic, "3");
+              
+              // 알림 발행
+              const notification = {
+                type: 'pump-reset',
+                pumpId,
+                timestamp: Date.now(),
+                clientId: clientId.current,
+                message: `펌프 ${pumpId} 리셋 명령(3)이 실행되었습니다.`
+              };
+              
+              mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+            }
+          }
+          
+          // 타이머 리셋 및 상태 초기화
+          setResetDragState(prev => ({
+            ...prev,
+            [pumpId]: {
+              dragging: false,
+              position: 0,
+              timer: null
+            }
+          }));
+        }, 2000); // 2초 후 실행
+        
+        return {
+          ...prev,
+          [pumpId]: {
+            ...currentState,
+            position,
+            timer
+          }
+        };
+      }
+      
+      // 그 외의 경우 위치만 업데이트
+      return {
+        ...prev,
+        [pumpId]: {
+          ...currentState,
+          position
+        }
+      };
+    });
+  };
+
+  // 리셋 드래그 종료
+  const handleResetDragEnd = (pumpId: number) => {
+    const currentState = resetDragState[pumpId];
+    if (!currentState?.dragging) return;
+    
+    // 이벤트 리스너 제거
+    document.removeEventListener('mousemove', (e) => handleResetDragMove(e, pumpId));
+    document.removeEventListener('touchmove', (e) => handleResetDragMove(e, pumpId));
+    document.removeEventListener('mouseup', () => handleResetDragEnd(pumpId));
+    document.removeEventListener('touchend', () => handleResetDragEnd(pumpId));
+    
+    // 타이머가 있고, 위치가 0.8 이상이면 타이머 유지 (계속 실행)
+    if (currentState.timer && currentState.position >= 0.8) {
+      return;
     }
-  }, []);
+    
+    // 타이머가 있지만 위치가 0.8 미만이면 타이머 취소
+    if (currentState.timer) {
+      clearTimeout(currentState.timer);
+    }
+    
+    // 상태 초기화
+    setResetDragState(prev => ({
+      ...prev,
+      [pumpId]: {
+        dragging: false,
+        position: 0,
+        timer: null
+      }
+    }));
+  };
   
   // 밸브 상태 변경 핸들러 - MQTT 알림 추가
   const handleValveChange = (newState: string) => {
@@ -618,8 +761,8 @@ export default function TankSystem({
       };
     });
 
-  // 본탱크 위치 - 사각형으로 변경하고 크기 확대
-  const mainTankPosition = { x: centerX, y: centerY, label: "본탱크", width: 180, height: 180 };
+  // 본탱크 위치 - 사각형으로 변경하고 크기 확대, 너비 확대/높이 감소
+  const mainTankPosition = { x: centerX, y: centerY, label: "본탱크", width: 220, height: 150 };
 
   // 밸브 위치 계산 수정
   // 2way 밸브(밸브1) 위치 계산 수정 - 본탱크에서 더 멀어지게, 1번 탱크 텍스트박스가 보이도록 아래로
@@ -906,6 +1049,15 @@ export default function TankSystem({
     setDraggingPump(null);
   };
 
+  // 컴포넌트 마운트 시 저장된 상태 복원
+  useEffect(() => {
+    const savedState = loadSystemState();
+    if (savedState && savedState.timestamp) {
+      // 마지막 저장 시간 표시
+      setLastStateUpdate(new Date(savedState.timestamp));
+    }
+  }, []);
+
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
       {/* 펄스 애니메이션 스타일 추가 */}
@@ -941,7 +1093,7 @@ export default function TankSystem({
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 */}
         <g transform="translate(0, -50) scale(0.75)">
-          {/* 본탱크 - 원형에서 사각형으로 변경 및 크기 확대 */}
+          {/* 본탱크 - 너비 확대, 높이 감소 */}
           <rect
             x={mainTankPosition.x - mainTankPosition.width / 2}
             y={mainTankPosition.y - mainTankPosition.height / 2}
@@ -966,7 +1118,7 @@ export default function TankSystem({
             {mainTankPosition.label}
           </text>
           
-          {/* 본탱크 상태 메시지 텍스트 박스 */}
+          {/* 본탱크 상태 메시지 텍스트 박스 - 너비 확대 */}
           <g>
             <rect
               x={mainTankPosition.x - mainTankPosition.width / 2}
@@ -1491,77 +1643,88 @@ export default function TankSystem({
             </text>
           </g>
 
-          {/* 5번 탱크 왼쪽에 추출 제어 버튼 추가 - 위치 수정 */}
+          {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정 */}
           <g transform={`translate(${tankPositions[4].x - 150}, ${tankPositions[4].y - 80})`}>
-            {/* 펌프 리셋 버튼 세로로 배치 */}
-            <g transform="translate(90, -190)">
+            {/* 펌프 리셋 버튼 상자 - 추출 제어 상자와 같은 높이로 조정 */}
+            <g transform="translate(90, -80)">
               <rect
                 x="-60"
-                y="-15"
+                y="-80"
                 width="120"
-                height="180"
+                height="160"
                 rx="10"
                 className="fill-gray-50/70 stroke-gray-200 stroke-2"
               />
               <text
                 x="0"
-                y="-2"
+                y="-60"
                 textAnchor="middle"
                 className="text-sm font-bold fill-gray-700"
               >
                 펌프 리셋
               </text>
               
-              {/* 펌프 리셋 버튼들 */}
+              {/* 펌프 리셋 버튼들 - 우측으로 움직이는 스위치로 변경 */}
               {Array(6).fill(0).map((_, i) => {
                 const pumpId = i + 1;
+                const resetState = resetDragState[pumpId] || { position: 0, dragging: false, timer: null };
+                
                 return (
                   <g 
                     key={`pump-reset-btn-${pumpId}`}
+                    id={`reset-btn-${pumpId}`}
                     className="cursor-pointer"
-                    onClick={() => {
-                      if (onPumpReset) {
-                        onPumpReset(pumpId);
-                      }
-                      
-                      if (mqttClient) {
-                        const pumpTopic = `extwork/pump${pumpId}/cmd`;
-                        mqttClient.publish(pumpTopic, "3");
-                        
-                        // 알림 발행
-                        const notification = {
-                          type: 'pump-reset',
-                          pumpId,
-                          timestamp: Date.now(),
-                          clientId: clientId.current,
-                          message: `펌프 ${pumpId} 리셋 명령(3)이 실행되었습니다.`
-                        };
-                        
-                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                      }
-                    }}
+                    onMouseDown={(e) => handleResetDragStart(pumpId, e)}
+                    onTouchStart={(e) => handleResetDragStart(pumpId, e)}
                   >
+                    {/* 리셋 스위치 배경 */}
                     <rect
                       x="-45"
-                      y={15 + i * 25}
-                      width="90"
-                      height="20"
-                      rx="5"
-                      className="fill-black hover:fill-gray-800 stroke-gray-700 stroke-1"
+                      y={-45 + i * 25}
+                      width="70"
+                      height="18"
+                      rx="9"
+                      className="fill-gray-200 stroke-gray-300 stroke-1"
                     />
+                    
+                    {/* 리셋 스위치 핸들 - 드래그에 따라 이동 */}
+                    <g className="transition-transform duration-100" 
+                       style={{ transform: `translateX(${resetState.position * 40}px)` }}>
+                      <rect
+                        x="-40"
+                        y={-44 + i * 25}
+                        width="30"
+                        height="16"
+                        rx="8"
+                        className={`${resetState.timer ? 'fill-red-500' : 'fill-black'} stroke-gray-700 stroke-1`}
+                      />
+                    </g>
+                    
+                    {/* 텍스트 */}
                     <text
-                      x="0"
-                      y={30 + i * 25}
+                      x="-10"
+                      y={-33 + i * 25}
                       textAnchor="middle"
-                      className="text-white font-bold text-sm"
+                      className="text-gray-700 font-bold text-[9px]"
                     >
                       펌프{pumpId}-리셋
                     </text>
+                    
+                    {/* 타이머 진행 표시 */}
+                    {resetState.timer && (
+                      <circle
+                        cx="0"
+                        cy={-35 + i * 25}
+                        r="5"
+                        className="fill-red-500 animate-pulse"
+                      />
+                    )}
                   </g>
                 );
               })}
             </g>
 
+            {/* 추출 제어 상자 */}
             <rect
               x="-60"
               y="-80"
