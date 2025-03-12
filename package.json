@@ -5,11 +5,11 @@
   "scripts": {
     "dev": "next dev & node server/websocket.js",
     "next-dev": "next dev",
+    "prebuild": "node hooks/pre-build.js",
     "build": "CI=false SKIP_PREFLIGHT_CHECK=true DISABLE_ESLINT_PLUGIN=true NEXT_DISABLE_ESLINT=1 NODE_OPTIONS=--max_old_space_size=4096 next build",
     "start": "next start & node server/websocket.js",
     "lint": "echo 'ESLint disabled'",
-    "test": "jest",
-    "prebuild": "node scripts/disable-eslint.js"
+    "test": "jest"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.2",
