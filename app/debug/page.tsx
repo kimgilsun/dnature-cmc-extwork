@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import MqttClient from "@/lib/mqtt-client";
 
 export default function DebugPage() {
   const [status, setStatus] = useState<string>("연결 대기 중...");
@@ -39,52 +38,67 @@ export default function DebugPage() {
       addLog(`브라우저 정보 수집 실패: ${err}`);
     }
 
-    // MQTT 클라이언트 생성
-    try {
-      addLog("MQTT 클라이언트 초기화 시작");
-      const client = new MqttClient();
-
-      client.onConnect = () => {
-        addLog("MQTT 브로커에 연결됨!");
-        setStatus("연결됨");
-        setIsConnected(true);
-
-        // 테스트 토픽 구독
-        client.subscribe("extwork/valve/state");
-        client.subscribe("extwork/extraction/progress");
-        addLog("토픽 구독 완료: extwork/valve/state, extwork/extraction/progress");
-      };
-
-      client.onDisconnect = () => {
-        addLog("MQTT 브로커와 연결 끊김");
-        setStatus("연결 끊김");
-        setIsConnected(false);
-      };
-
-      client.onError = (error) => {
-        const errorMessage = `MQTT 오류: ${error.message}`;
-        addLog(errorMessage);
-        setErrors(prev => [errorMessage, ...prev].slice(0, 10));
-      };
-
-      client.onMessage = (topic, message) => {
-        addLog(`메시지 수신: ${topic}`);
-        setMessages(prev => [
-          { topic, message, timestamp: Date.now() },
-          ...prev
-        ].slice(0, 10));
-      };
-
-      setMqttClient(client);
-      addLog("MQTT 클라이언트 초기화 완료");
-    } catch (err) {
-      addLog(`MQTT 클라이언트 초기화 실패: ${err}`);
-      setErrors(prev => [`초기화 오류: ${err}`, ...prev]);
-    }
-
+    // 1초 후에 MQTT 클라이언트 초기화
+    const timer = setTimeout(() => {
+      // 동적으로 MQTT 클라이언트 모듈 로드
+      import('@/lib/mqtt-client').then(module => {
+        const MqttClient = module.default;
+        
+        try {
+          addLog("MQTT 클라이언트 초기화 시작");
+          
+          const client = new MqttClient({
+            onConnect: () => {
+              addLog("MQTT 브로커에 연결됨!");
+              setStatus("연결됨");
+              setIsConnected(true);
+  
+              // 테스트 토픽 구독
+              client.subscribe("extwork/valve/state");
+              client.subscribe("extwork/extraction/progress");
+              addLog("토픽 구독 완료: extwork/valve/state, extwork/extraction/progress");
+            },
+            onDisconnect: () => {
+              addLog("MQTT 브로커와 연결 끊김");
+              setStatus("연결 끊김");
+              setIsConnected(false);
+            },
+            onError: (error: Error) => {
+              const errorMessage = `MQTT 오류: ${error.message}`;
+              addLog(errorMessage);
+              setErrors(prev => [errorMessage, ...prev].slice(0, 10));
+            },
+            onMessage: (topic: string, message: string) => {
+              addLog(`메시지 수신: ${topic}`);
+              setMessages(prev => [
+                { topic, message, timestamp: Date.now() },
+                ...prev
+              ].slice(0, 10));
+            }
+          });
+  
+          setMqttClient(client);
+          addLog("MQTT 클라이언트 초기화 완료");
+        } catch (err) {
+          addLog(`MQTT 클라이언트 초기화 실패: ${err}`);
+          setErrors(prev => [`초기화 오류: ${err}`, ...prev]);
+        }
+      }).catch(err => {
+        addLog(`MQTT 모듈 로드 실패: ${err}`);
+        setErrors(prev => [`모듈 로드 오류: ${err}`, ...prev]);
+      });
+    }, 1000);
+    
     return () => {
+      clearTimeout(timer);
       addLog("디버그 페이지 언마운트");
-      // mqttClient?.disconnect();
+      if (mqttClient) {
+        try {
+          mqttClient.disconnect();
+        } catch (e) {
+          console.error("연결 해제 중 오류:", e);
+        }
+      }
     };
   }, []);
 

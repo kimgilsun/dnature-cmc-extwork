@@ -1,7 +1,16 @@
-import mqtt from "mqtt";
+let mqtt: any;
+
+// 클라이언트 사이드에서만 mqtt 모듈 로드
+if (typeof window !== 'undefined') {
+  try {
+    mqtt = require('mqtt');
+  } catch (e) {
+    console.error("MQTT 모듈 로드 실패:", e);
+  }
+}
 
 class MqttClient {
-  private client: mqtt.MqttClient | null = null;
+  private client: any = null;
   private topics: Set<string> = new Set();
 
   // 콜백 함수들
@@ -13,9 +22,21 @@ class MqttClient {
   constructor(options?: {
     onConnect?: () => void;
     onDisconnect?: () => void;
-    onMessage?: (topic: string, message: Buffer | string) => void;
+    onMessage?: (topic: string, message: any) => void;
     onError?: (error: Error) => void;
   }) {
+    // 브라우저 환경인지 확인
+    if (typeof window === 'undefined') {
+      console.warn("MqttClient는 브라우저 환경에서만 사용 가능합니다.");
+      return;
+    }
+
+    // mqtt 모듈 로드 확인
+    if (!mqtt) {
+      console.error("MQTT 모듈이 로드되지 않았습니다.");
+      return;
+    }
+    
     // 옵션이 제공된 경우 콜백 함수 설정
     if (options) {
       if (options.onConnect) this.onConnect = options.onConnect;
@@ -26,18 +47,13 @@ class MqttClient {
       if (options.onError) this.onError = options.onError;
     }
     
-    // 브라우저 환경에서만 사용 가능
-    if (typeof window === 'undefined') {
-      console.warn("MqttClient는 브라우저 환경에서만 사용 가능합니다.");
-    } else {
-      console.log("MqttClient 초기화됨 - 브라우저 환경:", window.location.href);
-    }
+    console.log("MqttClient 초기화됨 - 브라우저 환경:", window.location.href);
   }
 
   // MQTT 브로커에 연결
   connect() {
     // 브라우저 환경에서만 연결 시도
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !mqtt) {
       console.warn("브라우저 환경에서만 MQTT 연결이 가능합니다.");
       return;
     }
@@ -61,7 +77,7 @@ class MqttClient {
 
     try {
       // MQTT 연결 옵션
-      const options: mqtt.IClientOptions = {
+      const options: any = {
         clientId: `extwork_${Math.random().toString(16).substring(2, 10)}`,
         username: "dnature",
         password: "XihQ2Q%RaS9u#Z3g",
@@ -73,27 +89,14 @@ class MqttClient {
         rejectUnauthorized: false,
       };
 
-      // 브로커 URL 설정
+      // 브로커 URL 설정 (하드코딩된 값 사용)
       const defaultUrl = "wss://api.codingpen.com:8884/mqtt";
-      let brokerUrl;
       
-      // 안전하게 환경 변수 접근
-      try {
-        brokerUrl = typeof process !== 'undefined' && 
-                    process.env && 
-                    process.env.NEXT_PUBLIC_MQTT_BROKER_URL 
-                      ? process.env.NEXT_PUBLIC_MQTT_BROKER_URL 
-                      : defaultUrl;
-      } catch (e) {
-        console.warn("환경 변수 접근 중 오류, 기본 URL 사용:", e);
-        brokerUrl = defaultUrl;
-      }
-      
-      console.log(`연결 시도 URL: ${brokerUrl}`);
+      console.log(`연결 시도 URL: ${defaultUrl}`);
       
       // 안전하게 MQTT 클라이언트 생성
       try {
-        this.client = mqtt.connect(brokerUrl, options);
+        this.client = mqtt.connect(defaultUrl, options);
         console.log("MQTT 클라이언트 생성 완료, 연결 시도 중...");
       } catch (e) {
         console.error("MQTT 클라이언트 생성 중 오류:", e);
@@ -132,9 +135,9 @@ class MqttClient {
         console.log("MQTT 브로커에 재연결 중...");
       });
 
-      this.client.on("error", (err) => {
+      this.client.on("error", (err: any) => {
         console.error("MQTT 오류:", err.message, err.stack);
-        this.onError(err);
+        this.onError(err instanceof Error ? err : new Error(String(err)));
       });
 
       this.client.on("close", () => {
@@ -146,7 +149,7 @@ class MqttClient {
         console.log("MQTT 클라이언트가 오프라인 상태입니다.");
       });
 
-      this.client.on("message", (topic, message) => {
+      this.client.on("message", (topic: string, message: any) => {
         try {
           const messageStr = message.toString();
           console.log(`메시지 수신: ${topic} - ${messageStr.substring(0, 100)}${messageStr.length > 100 ? '...' : ''}`);
@@ -163,6 +166,11 @@ class MqttClient {
 
   // 토픽 구독
   subscribe(topic: string) {
+    if (typeof window === 'undefined' || !mqtt) {
+      console.warn("브라우저 환경에서만 MQTT 구독이 가능합니다.");
+      return;
+    }
+    
     if (!this.client?.connected) {
       console.log(`토픽 ${topic}을(를) 구독하기 위해 대기 중. 연결 후 구독합니다.`);
       this.topics.add(topic); // 나중에 연결되면 구독할 토픽 저장
@@ -174,7 +182,7 @@ class MqttClient {
     }
 
     try {
-      this.client.subscribe(topic, (err) => {
+      this.client.subscribe(topic, (err: any) => {
         if (err) {
           console.error(`토픽 구독 실패: ${topic}`, err);
         } else {
@@ -189,6 +197,11 @@ class MqttClient {
 
   // 토픽 구독 해제
   unsubscribe(topic: string) {
+    if (typeof window === 'undefined' || !mqtt) {
+      console.warn("브라우저 환경에서만 MQTT 구독 해제가 가능합니다.");
+      return;
+    }
+    
     if (!this.client?.connected) {
       console.log("MQTT 브로커에 연결되어 있지 않습니다.");
       this.topics.delete(topic);
@@ -196,7 +209,7 @@ class MqttClient {
     }
 
     try {
-      this.client.unsubscribe(topic, (err) => {
+      this.client.unsubscribe(topic, (err: any) => {
         if (err) {
           console.error(`토픽 구독 해제 실패: ${topic}`, err);
         } else {
@@ -212,6 +225,11 @@ class MqttClient {
 
   // 메시지 발행
   publish(topic: string, message: string) {
+    if (typeof window === 'undefined' || !mqtt) {
+      console.warn("브라우저 환경에서만 MQTT 메시지 발행이 가능합니다.");
+      return;
+    }
+    
     if (!this.client?.connected) {
       console.log(`토픽 ${topic}에 메시지 발행을 위해 대기 중. 연결 후 발행합니다.`);
       
@@ -240,7 +258,7 @@ class MqttClient {
     }
 
     try {
-      this.client.publish(topic, message, (err) => {
+      this.client.publish(topic, message, (err: any) => {
         if (err) {
           console.error(`메시지 발행 실패: ${topic}`, err);
         } else {
@@ -254,6 +272,11 @@ class MqttClient {
 
   // 연결 종료
   disconnect() {
+    if (typeof window === 'undefined' || !mqtt) {
+      console.warn("브라우저 환경에서만 MQTT 연결 종료가 가능합니다.");
+      return;
+    }
+    
     if (this.client) {
       try {
         this.client.end(true);
@@ -267,6 +290,10 @@ class MqttClient {
 
   // 연결 상태 확인
   isConnected(): boolean {
+    if (typeof window === 'undefined' || !mqtt) {
+      return false;
+    }
+    
     try {
       return !!this.client?.connected;
     } catch (e) {
@@ -275,5 +302,23 @@ class MqttClient {
     }
   }
 }
+
+// 서버 사이드 렌더링 시 빈 객체 반환을 위한 기본 export
+const createMqttClient = (options?: any) => {
+  // 서버 사이드 렌더링인 경우 더미 클라이언트 반환
+  if (typeof window === 'undefined') {
+    return {
+      connect: () => {},
+      disconnect: () => {},
+      subscribe: () => {},
+      unsubscribe: () => {},
+      publish: () => {},
+      isConnected: () => false
+    };
+  }
+  
+  // 클라이언트 사이드에서는 실제 클라이언트 반환
+  return new MqttClient(options);
+};
 
 export default MqttClient; 
