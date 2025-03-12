@@ -45,91 +45,159 @@
 
 // actions/mqtt.ts
 
+// MQTT 클라이언트 타입 정의
+interface IMQTTClient {
+  connect: () => void;
+  disconnect: () => void;
+  subscribe: (topic: string, callback?: (topic: string, message: string) => void) => void;
+  unsubscribe: (topic: string) => void;
+  publish: (topic: string, message: string) => void;
+  isConnected: () => boolean;
+  on: (event: string, callback: any) => void;
+}
 
-// 주의: MQTT는 클라이언트 사이드 라이브러리이므로 "use server" 제거
-import mqtt, { MqttClient } from "mqtt";
+// 클라이언트 및 MQTT 객체를 위한 전역 변수
+let client: any = null;
+let mqtt: any = null;
 
-let client: MqttClient | null = null;
-
-// 싱글톤 패턴으로 클라이언트 인스턴스 관리
-const getClient = () => {
-  // 서버 사이드에서 실행 방지
-  if (typeof window === "undefined") return null;
-
-  if (!client) {
-    client = mqtt.connect("wss://api.codingpen.com:8884", {
-      username: "dnature",
-      password: "XihQ2Q%RaS9u#Z3g",
-      protocol: "wss",
-      rejectUnauthorized: false,
-    });
-
-    // 이벤트 핸들러 등록
-    client.on("connect", () => {
-      console.log("Connected to MQTT broker");
-    });
-
-    client.on("error", (err) => {
-      console.error("MQTT error:", err);
-      client = null; // 오류 발생 시 재연결을 위해 클라이언트 초기화
-    });
-
-    client.on("close", () => {
-      console.log("MQTT connection closed");
-      client = null;
-    });
+// 클라이언트 사이드에서만 MQTT 로드
+const getMqtt = () => {
+  if (typeof window === 'undefined') {
+    console.warn('getMqtt가 서버 사이드에서 호출되었습니다. MQTT는 클라이언트 사이드에서만 사용 가능합니다.');
+    return null;
   }
+  
+  if (!mqtt) {
+    try {
+      mqtt = require('mqtt');
+    } catch (error) {
+      console.error('MQTT 로드 실패:', error);
+      return null;
+    }
+  }
+  
+  return mqtt;
+};
+
+// MQTT 클라이언트 인스턴스 가져오기
+const getClient = () => {
+  if (typeof window === 'undefined') {
+    console.warn('getClient가 서버 사이드에서 호출되었습니다. MQTT는 클라이언트 사이드에서만 사용 가능합니다.');
+    return null;
+  }
+  
+  if (!client) {
+    const mqttModule = getMqtt();
+    if (!mqttModule) return null;
+    
+    try {
+      client = mqttModule.connect("wss://api.codingpen.com:8884", {
+        username: "dnature",
+        password: "XihQ2Q%RaS9u#Z3g",
+        protocol: "wss",
+        protocolVersion: 4,
+        reconnectPeriod: 5000,
+        connectTimeout: 30000,
+        keepalive: 60,
+        rejectUnauthorized: false,
+        clientId: `extwork_${Math.random().toString(16).substring(2, 10)}`,
+      });
+      
+      // 기본 이벤트 핸들러 설정
+      client.on("connect", () => {
+        console.log("MQTT 브로커에 연결되었습니다.");
+      });
+      
+      client.on("error", (err: any) => {
+        console.error("MQTT 오류:", err);
+      });
+      
+      client.on("close", () => {
+        console.log("MQTT 연결이 닫혔습니다.");
+      });
+    } catch (error) {
+      console.error('MQTT 클라이언트 생성 실패:', error);
+      return null;
+    }
+  }
+  
   return client;
 };
 
-// 클라이언트 연결 함수 (CSR 전용)
+// MQTT 연결 함수
 export async function connectMQTT() {
+  if (typeof window === 'undefined') {
+    console.warn('connectMQTT가 서버 사이드에서 호출되었습니다.');
+    return false;
+  }
+  
+  const client = getClient();
+  if (!client) return false;
+  
+  // 이미 연결되어 있으면 바로 반환
+  if (client.connected) return true;
+  
+  // 연결 시도
+  client.reconnect();
+  return true;
+}
+
+// 메시지 발행 함수
+export async function publishMessage(topic: string, message: string) {
+  if (typeof window === 'undefined') {
+    console.warn('publishMessage가 서버 사이드에서 호출되었습니다.');
+    return false;
+  }
+  
+  const client = getClient();
+  if (!client) return false;
+  
   try {
-    const client = getClient();
-    return !!client; // 연결 성공 여부 반환
-  } catch (err) {
-    console.error("Connection failed:", err);
+    client.publish(topic, message);
+    return true;
+  } catch (error) {
+    console.error('메시지 발행 실패:', error);
     return false;
   }
 }
 
-// 메시지 발행 함수 (컴포넌트에서 직접 사용)
-export async function publishMessage(topic: string, message: string) {
-  const client = getClient();
-  if (!client) {
-    throw new Error("MQTT client not initialized");
-  }
-
-  return new Promise((resolve, reject) => {
-    client!.publish(topic, message, (err) => {
-      if (err) reject(err);
-      else resolve(true);
-    });
-  });
-}
-
-// 토픽 구독 함수 (컴포넌트에서 사용)
+// 토픽 구독 함수
 export async function subscribeTopic(
   topic: string,
   messageHandler: (payload: string) => void
 ) {
-  const client = getClient();
-  if (!client) {
-    throw new Error("MQTT client not initialized");
+  if (typeof window === 'undefined') {
+    console.warn('subscribeTopic이 서버 사이드에서 호출되었습니다.');
+    return false;
   }
-
-  client.subscribe(topic);
-  client.on("message", (receivedTopic, payload) => {
-    if (receivedTopic === topic) {
-      messageHandler(payload.toString());
-    }
-  });
+  
+  const client = getClient();
+  if (!client) return false;
+  
+  try {
+    client.subscribe(topic);
+    
+    // 메시지 핸들러 등록
+    client.on('message', (receivedTopic: string, message: Buffer) => {
+      if (receivedTopic === topic) {
+        messageHandler(message.toString());
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('토픽 구독 실패:', error);
+    return false;
+  }
 }
 
-// 연결 해제 함수 (컴포넌트 unmount 시 사용)
+// 연결 종료 함수
 export function disconnectMQTT() {
+  if (typeof window === 'undefined') return false;
+  
   if (client) {
     client.end();
     client = null;
   }
+  return true;
 }
