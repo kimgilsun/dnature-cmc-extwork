@@ -1224,14 +1224,14 @@ export default function TankSystem({
                   }}
                 >
                   <circle
-                    cx={pumpPos.x + 45}
-                    cy={pumpPos.y}
+                    cx={pumpPos.x}
+                    cy={pumpPos.y - 45}
                     r={15}
                     className="fill-red-100 stroke-red-500 stroke-2"
                   />
                   <text
-                    x={pumpPos.x + 45}
-                    y={pumpPos.y + 4}
+                    x={pumpPos.x}
+                    y={pumpPos.y - 41}
                     textAnchor="middle"
                     className="text-red-600 font-bold text-sm"
                   >
