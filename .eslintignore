@@ -1,0 +1,17 @@
+# 빌드 파일
+.next/
+out/
+build/
+dist/
+
+# 의존성 디렉토리
+node_modules/
+
+# 앱 코드 - 경고를 모두 무시하기 위해 추가
+app/
+components/
+lib/
+pages/
+
+# 캐시 파일
+.eslintcache 

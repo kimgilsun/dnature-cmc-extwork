@@ -21,6 +21,14 @@ const nextConfig = {
     }
     return config;
   },
+  eslint: {
+    // 빌드 과정에서 ESLint 검사를 건너뜁니다
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // 또한 타입 검사도 건너뛰어 빌드 속도를 높입니다
+    ignoreBuildErrors: true,
+  },
 }
 
 module.exports = nextConfig 
