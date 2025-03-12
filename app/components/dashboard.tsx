@@ -80,7 +80,8 @@ const loadStateFromServer = async () => {
       
       if (response.ok) {
         const data = await response.json();
-        return data.data;
+        console.log('서버에서 불러온 데이터:', data);
+        return data.data; // API 응답의 data 필드에 실제 데이터가 있음
       } else {
         console.error('서버 상태 불러오기 실패:', response.status);
       }
