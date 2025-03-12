@@ -1,7 +1,7 @@
 "use client"
 import { motion } from "framer-motion"
 import { useEffect, useState, useRef } from "react"
-import { MqttClient } from "mqtt"
+// import { MqttClient } from "mqtt" - 클라이언트 측에서 사용할 수 없음
 import { cn } from '@/lib/utils';
 import "./tank-system.css"; // 새로 생성한 CSS 파일 import
 
@@ -235,7 +235,7 @@ interface TankSystemProps {
   onPumpReset?: (pumpId: number) => void   // 펌프 리셋 함수 추가
   onPumpKCommand?: (pumpId: number) => void // K 명령 발행 함수 추가
   pumpStateMessages?: Record<number, string> // 펌프 상태 메시지
-  mqttClient?: MqttClient // MQTT 클라이언트 추가
+  mqttClient?: any // MQTT 클라이언트 타입을 any로 변경
   onExtractionCommand?: (command: string) => void // 추출 명령 함수 추가
 }
 
