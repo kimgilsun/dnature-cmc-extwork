@@ -1565,21 +1565,21 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* K 스위치 - 1번 탱크 벽에 가깝게 배치 */}
+                {/* K 스위치 - 1번 탱크 우측 상단에 배치 */}
                 <g 
                   className="cursor-pointer"
                   onClick={() => onPumpKCommand && onPumpKCommand(1)}
                   style={{ zIndex: 50 }}
                 >
                   <circle
-                    cx={tankPositions[0].x + tankWidth/2 - 20}
-                    cy={tankPositions[0].y}
+                    cx={tankPositions[0].x + tankWidth/2 - 15}
+                    cy={tankPositions[0].y - tankHeight/2 + 20}
                     r={15}
                     className="fill-blue-100 stroke-blue-300 stroke-2"
                   />
                   <text
-                    x={tankPositions[0].x + tankWidth/2 - 20}
-                    y={tankPositions[0].y + 4}
+                    x={tankPositions[0].x + tankWidth/2 - 15}
+                    y={tankPositions[0].y - tankHeight/2 + 24}
                     textAnchor="middle"
                     className="text-blue-500 font-bold text-sm"
                   >
@@ -1928,8 +1928,8 @@ export default function TankSystem({
             </text>
           </g>
 
-          {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정하여 나란히 배치 */}
-          <g transform={`translate(${tankPositions[4].x - 280}, ${tankPositions[4].y})`}>
+          {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정하여 더 우측으로 이동 */}
+          <g transform={`translate(${tankPositions[4].x - 250}, ${tankPositions[4].y})`}>
             {/* 추출 제어 상자 */}
             <rect
               x="-60"
