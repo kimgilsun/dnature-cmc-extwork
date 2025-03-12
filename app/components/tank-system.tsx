@@ -1099,7 +1099,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(1, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  1
+                  inverter_1
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1203,7 +1203,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(2, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  2
+                  inverter_2
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1292,7 +1292,7 @@ export default function TankSystem({
                     onTouchStart={(e) => handlePumpSwitchStart(pumpNum, e)}
                   />
                   <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                    {pumpNum}
+                    inverter_{pumpNum}
                   </text>
                   
                   {/* 펌프 스위치 표시 */}
@@ -1726,6 +1726,8 @@ export default function TankSystem({
             <details className="text-[9px]" open>
               <summary className="font-bold cursor-pointer mb-2">시스템 상태 정보</summary>
               <div className="bg-white p-2 rounded border border-gray-100 space-y-1 max-h-[100px] overflow-y-auto">
+                {/* 확인용 동그라미 추가 */}
+                <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500/50 border-2 border-red-600 animate-pulse"></div>
                 <div>
                   <span className="font-semibold">밸브 상태:</span> 
                   3방향 밸브: {valve1 === 1 ? `ON (${valve1Desc || "추출순환"})` : `OFF (${valve1Desc || "전체순환"})`}, 
