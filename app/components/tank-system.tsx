@@ -1098,8 +1098,8 @@ export default function TankSystem({
                   onMouseDown={(e) => handlePumpSwitchStart(1, e)}
                   onTouchStart={(e) => handlePumpSwitchStart(1, e)}
                 />
-                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                  IP_1
+                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                  {tank.pumpStatus}
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1202,8 +1202,8 @@ export default function TankSystem({
                   onMouseDown={(e) => handlePumpSwitchStart(2, e)}
                   onTouchStart={(e) => handlePumpSwitchStart(2, e)}
                 />
-                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                  IP_2
+                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                  {tank.pumpStatus}
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1291,8 +1291,8 @@ export default function TankSystem({
                     onMouseDown={(e) => handlePumpSwitchStart(pumpNum, e)}
                     onTouchStart={(e) => handlePumpSwitchStart(pumpNum, e)}
                   />
-                  <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                    IP_{pumpNum}
+                  <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                    {tank.pumpStatus}
                   </text>
                   
                   {/* 펌프 스위치 표시 */}
@@ -1437,23 +1437,21 @@ export default function TankSystem({
             <line x1="-20" y1="0" x2="20" y2="0" className="stroke-yellow-500 stroke-2" />
             <line x1="0" y1="0" x2="0" y2="15" className="stroke-yellow-500 stroke-2" />
             
-            {/* ON 상태일 때만 스위치 표시 */}
-            {valve1 === 1 && (
-              <rect 
-                x="-20" 
-                y="-20" 
-                width="40" 
-                height="20" 
-                rx="10" 
-                className="fill-green-500 stroke-gray-400 stroke-1 transition-all duration-300" 
-              />
-            )}
+            {/* ON/OFF 스위치 - 위치에 따라 위아래로 이동 */}
+            <rect 
+              x="-20" 
+              y={valve1 === 1 ? "-20" : "0"} 
+              width="40" 
+              height="20" 
+              rx="10" 
+              className={`${valve1 === 1 ? "fill-green-500" : "fill-red-500"} stroke-gray-400 stroke-1 transition-all duration-300`} 
+            />
             
             {/* 밸브 텍스트 변경 */}
             <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
               밸브2
             </text>
-            <text x="0" y={valve1 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-black">
+            <text x="0" y={valve1 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
               {valve1 === 1 ? "추출순환" : "전체순환"}
             </text>
           </g>
@@ -1474,23 +1472,21 @@ export default function TankSystem({
             <line x1="-20" y1="0" x2="20" y2="0" className="stroke-yellow-500 stroke-2" />
             {valve2 === 1 && <line x1="0" y1="-15" x2="0" y2="15" className="stroke-yellow-500 stroke-2" />}
             
-            {/* ON 상태일 때만 스위치 표시 */}
-            {valve2 === 1 && (
-              <rect 
-                x="-20" 
-                y="-20" 
-                width="40" 
-                height="20" 
-                rx="10" 
-                className="fill-green-500 stroke-gray-400 stroke-1 transition-all duration-300" 
-              />
-            )}
+            {/* ON/OFF 스위치 */}
+            <rect 
+              x="-20" 
+              y={valve2 === 1 ? "-20" : "0"} 
+              width="40" 
+              height="20" 
+              rx="10" 
+              className={`${valve2 === 1 ? "fill-green-500" : "fill-red-500"} stroke-gray-400 stroke-1 transition-all duration-300`} 
+            />
             
             {/* 밸브 텍스트 변경 */}
             <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
               밸브1
             </text>
-            <text x="0" y={valve2 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-black">
+            <text x="0" y={valve2 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
               {valve2 === 1 ? "ON" : "OFF"}
             </text>
           </g>
