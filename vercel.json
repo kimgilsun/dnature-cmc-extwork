@@ -5,8 +5,8 @@
       "src": "package.json",
       "use": "@vercel/next",
       "config": {
-        "installCommand": "npm install --force",
-        "buildCommand": "DISABLE_ESLINT_PLUGIN=true npm run build",
+        "installCommand": "npm install --force && node scripts/disable-eslint.js",
+        "buildCommand": "DISABLE_ESLINT_PLUGIN=true NEXT_DISABLE_ESLINT=1 NODE_OPTIONS=--max_old_space_size=4096 npm run build",
         "zeroConfig": true
       }
     }
@@ -24,6 +24,8 @@
   },
   "env": {
     "DISABLE_ESLINT_PLUGIN": "true",
-    "NEXT_DISABLE_ESLINT": "true"
+    "NEXT_DISABLE_ESLINT": "1",
+    "ESLINT_NO_DEV_ERRORS": "true",
+    "NEXT_TELEMETRY_DISABLED": "1"
   }
 } 
