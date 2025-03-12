@@ -967,10 +967,21 @@ export default function TankSystem({
           const pumpStatus = tankData.tanks[i].pumpStatus;
           
           return (
-            <div key={`pump-control-${pumpNum}`} className="flex flex-col items-center">
-              {/* R 버튼 - 상단에 추가 */}
+            <div key={`pump-control-${pumpNum}`} className="flex items-center">
               <button 
-                className="mb-1 w-8 h-8 rounded bg-red-100 text-red-700 border border-red-300"
+                className={`px-4 py-1 rounded text-[10px] ${
+                  pumpStatus === "ON" 
+                    ? 'bg-green-100 text-green-700 border border-green-300' 
+                    : 'bg-red-100 text-red-700 border border-red-300'
+                }`}
+                onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
+              >
+                펌프 {pumpNum}: {pumpStatus}
+              </button>
+              
+              {/* R 버튼 - 펌프 버튼 옆에 추가 */}
+              <button 
+                className="ml-1 w-6 h-6 rounded bg-red-100 text-red-700 border border-red-300"
                 onClick={() => {
                   if (onPumpReset) {
                     onPumpReset(pumpNum);
@@ -992,17 +1003,6 @@ export default function TankSystem({
                 }}
               >
                 R
-              </button>
-              
-              <button 
-                className={`px-4 py-1 rounded text-[10px] ${
-                  pumpStatus === "ON" 
-                    ? 'bg-green-100 text-green-700 border border-green-300' 
-                    : 'bg-red-100 text-red-700 border border-red-300'
-                }`}
-                onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
-              >
-                펌프 {pumpNum}: {pumpStatus}
               </button>
             </div>
           )
