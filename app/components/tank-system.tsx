@@ -354,7 +354,7 @@ export default function TankSystem({
   // 3way 밸브 위치 계산 - 6번 탱크와 본탱크 사이에 배치하되 펌프1과 교차하지 않도록
   const valve3wayPosition = {
     x: (tankPositions[5].x + centerX) / 2 - 50, // 본탱크와 6번 탱크 사이에 배치, 약간 왼쪽으로 조정
-    y: tankPositions[5].y + 50, // 6번 탱크보다 조금 아래에 위치
+    y: (tankPositions[5].y + centerY) / 2 - 30, // 위치 조정하여 직선 연결
   }
 
   // 펌프 위치 계산 함수 수정 - 현재 탱크와 다음 탱크 사이에 위치하도록
@@ -379,10 +379,11 @@ export default function TankSystem({
     return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
   }
 
-  // 6번 탱크에서 3way 밸브로의 경로 (직선 연결)
+  // 6번 탱크에서 3way 밸브로의 경로 (직선 연결) - 수직 연결로 변경
   const calculate6ToValvePath = () => {
-    // 6번 탱크에서 3way 밸브로 직선 연결
-    return `M ${tankPositions[5].x} ${tankPositions[5].y} L ${valve3wayPosition.x} ${valve3wayPosition.y}`
+    // 6번 탱크 하단 가장자리에서 시작하여 3way 밸브까지 수직 연결
+    const tankY = tankPositions[5].y + tankHeight / 2;
+    return `M ${tankPositions[5].x} ${tankY} V ${valve3wayPosition.y}`;
   }
 
   // 3way 밸브에서 본탱크로의 경로 (직선 연결)
@@ -713,6 +714,11 @@ export default function TankSystem({
             ? pos.y + tankHeight / 2 + 5
             : pos.y + tankHeight / 2 + 5;
           
+          // 4번 탱크인 경우 텍스트 박스 위치 조정
+          const adjustedTextBoxY = tankNum === 4
+            ? pos.y + tankHeight / 2 + 20
+            : textBoxY;
+          
           // 1번 탱크 텍스트 박스 너비 조정
           const textBoxWidth = tankNum === 1 ? 120 : tankWidth;
           
@@ -743,11 +749,11 @@ export default function TankSystem({
                 {pos.label}
               </text>
               
-              {/* 탱크 상태 메시지 텍스트 박스 - 1번 탱크는 위치와 크기 조정 */}
+              {/* 탱크 상태 메시지 텍스트 박스 - 1번과 4번 탱크 위치 조정 */}
               <g>
                 <rect
                   x={tankNum === 1 ? pos.x - textBoxWidth / 2 : pos.x - tankWidth / 2}
-                  y={textBoxY}
+                  y={adjustedTextBoxY}
                   width={textBoxWidth}
                   height={20}
                   rx="3"
@@ -755,7 +761,7 @@ export default function TankSystem({
                 />
                 <text
                   x={pos.x}
-                  y={textBoxY + 13}
+                  y={adjustedTextBoxY + 13}
                   textAnchor="middle"
                   className="text-[9px] fill-gray-700"
                 >
@@ -766,30 +772,30 @@ export default function TankSystem({
           )
         })}
 
-        {/* 3way 밸브 - ON/OFF 스위치 형태로 개선 */}
+        {/* 3way 밸브 - ON/OFF 스위치 형태로 개선 - 크기 줄임 */}
         <g
           onClick={() => onValveChange(getNextValveState())}
           className="cursor-pointer"
           transform={`translate(${valve3wayPosition.x}, ${valve3wayPosition.y})`}
         >
-          {/* 밸브 배경 */}
+          {/* 밸브 배경 - 크기 줄임 */}
           <rect 
             x="-30" 
-            y="-40" 
+            y="-30" 
             width="60" 
-            height="80" 
+            height="50" 
             rx="10" 
             className={`fill-yellow-50 stroke-yellow-400 stroke-2`} 
           />
           
-          {/* 밸브 내부 T자 표시 */}
+          {/* 밸브 내부 T자 표시 - 크기 조정 */}
           <line x1="-20" y1="0" x2="20" y2="0" className="stroke-yellow-500 stroke-2" />
-          <line x1="0" y1="0" x2="0" y2="20" className="stroke-yellow-500 stroke-2" />
+          <line x1="0" y1="0" x2="0" y2="15" className="stroke-yellow-500 stroke-2" />
           
           {/* ON/OFF 스위치 - 위치에 따라 위아래로 이동 */}
           <rect 
             x="-20" 
-            y={valve1 === 1 ? "-25" : "5"} 
+            y={valve1 === 1 ? "-20" : "0"} 
             width="40" 
             height="20" 
             rx="10" 
@@ -797,13 +803,13 @@ export default function TankSystem({
           />
           
           {/* 밸브 텍스트 */}
-          <text x="0" y="-30" textAnchor="middle" className="text-xs font-bold">
+          <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
             3way 밸브
           </text>
-          <text x="0" y={valve1 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
+          <text x="0" y={valve1 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve1 === 1 ? "ON" : "OFF"}
           </text>
-          <text x="0" y="50" textAnchor="middle" className="text-[10px] text-gray-700">
+          <text x="0" y="30" textAnchor="middle" className="text-[10px] text-gray-700">
             {valve1 === 1 ? valve1Desc || "추출순환" : "전체순환"}
           </text>
         </g>
@@ -874,20 +880,21 @@ export default function TankSystem({
                 {tank.pumpStatus}
               </text>
               
-              {/* K 스위치 위치 변경 - 펌프 왼쪽 위로 이동 */}
+              {/* K 스위치 위치 변경 - 우측 상단 펌프 스위치 왼쪽 상단으로 이동 */}
               <g 
                 className="cursor-pointer"
                 onClick={() => onPumpKCommand && onPumpKCommand(1)}
+                transform="translate(710, 40)"
               >
                 <circle
-                  cx={pumpPos.x - 30}
-                  cy={pumpPos.y - 30}
+                  cx={0}
+                  cy={0}
                   r={12}
                   className="fill-white stroke-blue-500 stroke-2"
                 />
                 <text
-                  x={pumpPos.x - 30}
-                  y={pumpPos.y - 26}
+                  x={0}
+                  y={4}
                   textAnchor="middle"
                   className="text-blue-600 font-bold text-sm"
                 >
