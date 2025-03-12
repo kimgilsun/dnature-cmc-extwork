@@ -350,10 +350,10 @@ export default function TankSystem({
     y: centerY - 100, // 본탱크 위쪽에 배치하되 더 아래로 조정 (기존 -150에서 -100으로)
   }
 
-  // 3way 밸브(밸브2) 위치 계산 - 6번 탱크 바로 우측에 배치
+  // 3way 밸브(밸브2) 위치 계산 - 6번 탱크 바로 우측에 배치하고 약간 아래로 내림
   const valve3wayPosition = {
     x: tankPositions[5].x + tankWidth / 2 + 50, // 6번 탱크 바로 우측으로 이동
-    y: tankPositions[5].y, // 6번 탱크와 동일한 높이
+    y: tankPositions[5].y + 20, // 6번 탱크와 동일한 높이에서 약간 아래로 조정
   }
 
   // 펌프 위치 계산 함수 수정 - 현재 탱크와 다음 탱크 사이에 위치하도록
@@ -419,7 +419,7 @@ export default function TankSystem({
             L ${pump1Pos.x} ${pump1Pos.y}`;
   }
 
-  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 직접 짧게 연결
+  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 직접 짧게 연결하되 더 길게 보이도록
   const calculate3wayToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     
@@ -430,9 +430,9 @@ export default function TankSystem({
     // 벡터 길이
     const length = Math.sqrt(dx*dx + dy*dy);
     
-    // 밸브2에서 펌프1 방향으로 20% 정도만 이동한 지점으로 연결
-    const endX = valve3wayPosition.x + dx * 0.2;
-    const endY = valve3wayPosition.y + dy * 0.2;
+    // 밸브2에서 펌프1 방향으로 35% 정도 이동한 지점으로 연결 (기존 20%에서 증가)
+    const endX = valve3wayPosition.x + dx * 0.35;
+    const endY = valve3wayPosition.y + dy * 0.35;
     
     return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${endX} ${endY}`;
   }
