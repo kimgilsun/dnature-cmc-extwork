@@ -72,6 +72,28 @@ export default function Dashboard() {
   // 기본 탱크 시스템 데이터로 초기화 (6개 탱크)
   const [tankData, setTankData] = useState<TankSystemData>(getDefaultTankSystemData(6))
 
+  // 로컬 스토리지에서 이전 밸브 상태 로드
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        // 탱크 데이터 로드
+        const savedTankData = localStorage.getItem('tankData');
+        if (savedTankData) {
+          setTankData(JSON.parse(savedTankData));
+        }
+
+        // 밸브 상태 로드 (별도 저장된 경우)
+        const savedValveState = localStorage.getItem('valveState');
+        if (savedValveState) {
+          const valveState = JSON.parse(savedValveState);
+          // valveState를 탱크 데이터에 적용하는 로직 (필요한 경우)
+        }
+      } catch (error) {
+        console.error('로컬 스토리지에서 데이터 로드 중 오류:', error);
+      }
+    }
+  }, []);
+
   // MQTT 클라이언트 초기화
   useEffect(() => {
     console.log("MQTT 클라이언트 초기화 시작 - 현재 위치:", window.location.href);
@@ -99,15 +121,8 @@ export default function Dashboard() {
       client.subscribe(ERROR_TOPIC);
       console.log("에러 토픽 구독:", ERROR_TOPIC);
       
-      // 카메라 상태 토픽 구독
-      for(let i = 1; i <= 5; i++) {
-        client.subscribe(getCamStateTopic(i));
-      }
-      
-      // 밸브 상태 토픽 명시적 구독
-      client.subscribe(VALVE_STATE_TOPIC);
-      
-      console.log("구독한 토픽 목록:", topics, "및", VALVE_STATE_TOPIC, PROCESS_PROGRESS_TOPIC, ERROR_TOPIC);
+      // 연결 즉시 밸브 상태 요청 메시지 전송
+      client.publish(VALVE_INPUT_TOPIC, "STATUS");
     };
 
     client.onDisconnect = () => {
@@ -266,8 +281,19 @@ export default function Dashboard() {
         const { valveState, valveADesc, valveBDesc } = parseValveStateMessage(message);
         if (valveState) {
           console.log(`밸브 상태 코드 업데이트: ${valveState}, 설명 A: ${valveADesc}, 설명 B: ${valveBDesc}`);
-          setTankData((prev) => ({ 
-            ...prev, 
+          
+          const updatedTankData = {
+            ...tankData,
+            valveState,
+            valveADesc: valveADesc || '',
+            valveBDesc: valveBDesc || ''
+          };
+          
+          setTankData(updatedTankData);
+          
+          // 로컬 스토리지에 저장
+          localStorage.setItem('tankData', JSON.stringify(updatedTankData));
+          localStorage.setItem('valveState', JSON.stringify({
             valveState,
             valveADesc: valveADesc || '',
             valveBDesc: valveBDesc || ''
@@ -303,13 +329,25 @@ export default function Dashboard() {
         const newValveState = valveAState + valveBState + valveCState + valveDState;
         console.log(`밸브 상태 업데이트 결과: 코드=${newValveState}, valveA 설명=${valveADesc}, valveB 설명=${valveBDesc}`);
         
-        // 상태 업데이트
-        setTankData((prev) => ({ 
-          ...prev, 
+        // 업데이트할 탱크 데이터 생성
+        const updatedTankData = {
+          ...tankData,
           valveState: newValveState,
           valveStatusMessage,
           valveADesc,
           valveBDesc
+        };
+        
+        // 상태 업데이트
+        setTankData(updatedTankData);
+        
+        // 로컬 스토리지에 저장
+        localStorage.setItem('tankData', JSON.stringify(updatedTankData));
+        localStorage.setItem('valveState', JSON.stringify({
+          valveState: newValveState,
+          valveADesc, 
+          valveBDesc,
+          valveStatusMessage
         }));
       }
       return;
@@ -430,23 +468,29 @@ export default function Dashboard() {
 
   // 밸브 상태 변경
   const changeValveState = (newState: string) => {
-    // MQTT 메시지 발행
     if (mqttClient) {
       let mqttMessage = ""
+      
+      // 메시지 형식: "0000" - 순서대로 V1, V2, 방향1, 방향2 상태
       switch (newState) {
-        case "1000":
+        case "valve1":
           mqttMessage = "1000"
           break
-        case "0100":
+        case "valve2":
           mqttMessage = "0100"
           break
-        case "0000":
+        case "valve_all_off":
           mqttMessage = "0000"
           break
+        // 추가 밸브 상태들...
       }
-
+      
       if (mqttMessage) {
+        console.log(`밸브 상태 변경: ${newState} - 메시지: ${mqttMessage}`);
         mqttClient.publish(VALVE_INPUT_TOPIC, mqttMessage)
+        
+        // 새로운 상태를 로컬 스토리지에 바로 저장할 수도 있지만,
+        // MQTT 응답을 통해 실제 상태가 변경된 후 저장하는 것이 더 안전합니다.
       }
     }
   }
