@@ -10,9 +10,19 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
+// sonner 대신 간단한 알림 함수 사용
+// import { toast } from "sonner";
+// import { Toaster } from "@/components/ui/sonner";
 import MqttClient from "@/lib/mqtt-client";
+
+// 간단한 알림 함수 정의
+const showAlert = (message: string) => {
+  console.log(message);
+  // 프로덕션에서는 window.alert 사용
+  if (typeof window !== 'undefined') {
+    window.alert(message);
+  }
+};
 
 // 모드 정의
 const MODES = [
@@ -56,9 +66,7 @@ export default function MqttControlPage() {
       onConnect: () => {
         console.log("MQTT 브로커에 연결됨");
         setIsConnected(true);
-        toast.success("MQTT 연결 성공", {
-          description: "MQTT 브로커에 연결되었습니다."
-        });
+        showAlert("MQTT 연결 성공: MQTT 브로커에 연결되었습니다.");
         
         // 연결 시 서버에서 최신 명령 기록 불러오기
         loadCommandHistoryFromServer();
@@ -66,9 +74,7 @@ export default function MqttControlPage() {
       onDisconnect: () => {
         console.log("MQTT 브로커에서 연결 해제됨");
         setIsConnected(false);
-        toast.error("MQTT 연결 해제", {
-          description: "MQTT 브로커와의 연결이 해제되었습니다."
-        });
+        showAlert("MQTT 연결 해제: MQTT 브로커와의 연결이 해제되었습니다.");
       },
       onMessage: (topic: string, message: Buffer | string) => {
         console.log(`메시지 수신: ${topic} - ${message.toString()}`);
@@ -76,9 +82,7 @@ export default function MqttControlPage() {
       },
       onError: (error: Error) => {
         console.error("MQTT 오류:", error);
-        toast.error("MQTT 오류", {
-          description: `오류가 발생했습니다: ${error.message}`
-        });
+        showAlert(`MQTT 오류: ${error.message}`);
       }
     });
     
@@ -150,18 +154,14 @@ export default function MqttControlPage() {
   // 명령 발송 함수
   const sendCommand = () => {
     if (!mqttClient || !isConnected) {
-      toast.error("연결 오류", {
-        description: "MQTT 브로커에 연결되어 있지 않습니다."
-      });
+      showAlert("연결 오류: MQTT 브로커에 연결되어 있지 않습니다.");
       return;
     }
     
     const activePumps = pumpStatus.map((status, index) => status ? index + 1 : null).filter(id => id !== null);
     
     if (activePumps.length === 0) {
-      toast.error("입력 오류", {
-        description: "최소 하나 이상의 펌프를 선택해야 합니다."
-      });
+      showAlert("입력 오류: 최소 하나 이상의 펌프를 선택해야 합니다.");
       return;
     }
     
@@ -192,14 +192,10 @@ export default function MqttControlPage() {
       // 서버에 명령 기록 저장
       saveCommandHistoryToServer(updatedHistory);
       
-      toast.success("명령 발송 성공", {
-        description: `명령이 ${topic}으로 발송되었습니다.`
-      });
+      showAlert(`명령 발송 성공: 명령이 ${topic}으로 발송되었습니다.`);
     } catch (error) {
       console.error("명령 발송 오류:", error);
-      toast.error("명령 발송 실패", {
-        description: `오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`
-      });
+      showAlert(`명령 발송 실패: 오류가 발생했습니다. ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -513,8 +509,6 @@ export default function MqttControlPage() {
           </div>
         </div>
       </div>
-      
-      <Toaster />
     </div>
   );
 } 
