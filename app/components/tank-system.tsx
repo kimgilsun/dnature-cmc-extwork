@@ -12,23 +12,32 @@ const generateClientId = () => {
 };
 
 // 시스템 상태 저장 및 불러오기 함수 개선
-const saveSystemState = (state: any) => {
+const saveSystemState = async (state: any) => {
   if (typeof window !== 'undefined') {
     // 로컬 스토리지에 저장
     try {
-      localStorage.setItem('tankSystemState', JSON.stringify({
+      const stateToSave = {
         ...state,
         timestamp: Date.now(),
         version: '1.0'
-      }));
+      };
       
-      // 서버 API를 통해 상태 저장 (나중에 실제 API로 대체)
+      localStorage.setItem('tankSystemState', JSON.stringify(stateToSave));
+      
+      // 서버 API를 통해 상태 저장
       if (window.navigator.onLine) {
-        const stateToSave = {
-          ...state,
-          timestamp: Date.now(),
-          version: '1.0'
-        };
+        try {
+          const response = await fetch('/api/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(stateToSave)
+          });
+          
+          const result = await response.json();
+          console.log('서버 상태 저장 결과:', result);
+        } catch (serverError) {
+          console.error('서버 상태 저장 실패:', serverError);
+        }
         
         // 상태가 변경될 때마다 세션 스토리지에도 백업 저장
         sessionStorage.setItem('tankSystemState', JSON.stringify(stateToSave));
@@ -82,32 +91,76 @@ const saveToIndexedDB = (state: any) => {
 
 // 상태 불러오기 함수 개선
 const loadSystemState = () => {
-  if (typeof window === 'undefined') return null;
-  
-  try {
-    // 우선 로컬 스토리지에서 시도
-    const savedStateStr = localStorage.getItem('tankSystemState');
-    let savedState = savedStateStr ? JSON.parse(savedStateStr) : null;
-    
-    // 세션 스토리지에서도 확인 (더 최신일 수 있음)
-    const sessionStateStr = sessionStorage.getItem('tankSystemState');
-    const sessionState = sessionStateStr ? JSON.parse(sessionStateStr) : null;
-    
-    // 타임스탬프 비교하여 더 최신 상태 사용
-    if (sessionState && sessionState.timestamp > (savedState?.timestamp || 0)) {
-      savedState = sessionState;
+  if (typeof window !== 'undefined') {
+    try {
+      const storedState = localStorage.getItem('tankSystemState');
+      
+      if (storedState) {
+        return JSON.parse(storedState);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('상태 불러오기 실패:', error);
+      return null;
     }
-    
-    // IndexedDB에서도 확인 (비동기 로드는 별도 함수로)
-    loadFromIndexedDB().then(indexedDBState => {
-      // 컴포넌트에서 별도로 처리
-    });
-    
-    return savedState;
-  } catch (error) {
-    console.error('상태 불러오기 실패:', error);
-    return null;
   }
+  
+  return null;
+};
+
+// 서버에서 초기 상태 불러오기
+const loadInitialState = async (): Promise<any> => {
+  if (typeof window !== 'undefined') {
+    try {
+      // 서버 API에서 상태 가져오기
+      if (window.navigator.onLine) {
+        try {
+          console.log('서버에서 최신 상태 불러오기 시도...');
+          const response = await fetch('/api/state');
+          
+          if (response.ok) {
+            const serverData = await response.json();
+            
+            if (serverData.data) {
+              console.log('서버에서 상태를 성공적으로 불러왔습니다:', serverData.lastUpdated);
+              return serverData.data;
+            } else {
+              console.log('서버에 저장된 상태가 없습니다. 로컬 스토리지 사용.');
+            }
+          } else {
+            console.error('서버 응답 오류:', response.status);
+          }
+        } catch (serverError) {
+          console.error('서버에서 상태 불러오기 실패:', serverError);
+        }
+      }
+      
+      // 서버에서 불러오기 실패 시 로컬 스토리지에서 불러오기
+      const localState = loadSystemState();
+      if (localState) {
+        console.log('로컬 스토리지에서 상태를 불러왔습니다.');
+        return localState;
+      }
+      
+      // IndexedDB에서 불러오기 시도
+      try {
+        const idbState = await loadFromIndexedDB();
+        if (idbState) {
+          console.log('IndexedDB에서 상태를 불러왔습니다.');
+          return idbState;
+        }
+      } catch (idbError) {
+        console.error('IndexedDB에서 상태 불러오기 실패:', idbError);
+      }
+      
+    } catch (error) {
+      console.error('초기 상태 불러오기 실패:', error);
+    }
+  }
+  
+  console.log('사용 가능한 저장된 상태가 없습니다. 기본값 사용.');
+  return null;
 };
 
 // IndexedDB에서 상태 불러오기 (Promise 반환)
@@ -1341,6 +1394,35 @@ export default function TankSystem({
     setPumpSwitchPosition(prev => ({...prev, [draggingPump]: 0}));
     setDraggingPump(null);
   };
+
+  // 최초 로드 및 저장된 상태 복원
+  useEffect(() => {
+    // 중요: 비동기 함수를 별도로 선언하여 실행
+    const loadSavedState = async () => {
+      if (mqttClient) {
+        // 서버 및 로컬 스토리지에서 상태 로드 시도
+        const savedState = await loadInitialState();
+        
+        if (savedState) {
+          console.log('저장된 상태를 복원합니다.');
+          
+          // 저장된 상태로 업데이트 로직 (예: onValveChange 호출 등)
+          if (savedState.valveState && onValveChange) {
+            onValveChange(savedState.valveState);
+          }
+          
+          // 필요한 경우 상태 업데이트를 MQTT로 브로드캐스트
+          mqttClient.publish('tank-system/state-loaded', JSON.stringify({
+            clientId: clientId.current,
+            timestamp: Date.now(),
+            source: 'localStorage'
+          }));
+        }
+      }
+    };
+    
+    loadSavedState();
+  }, [mqttClient, onValveChange]);
 
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">

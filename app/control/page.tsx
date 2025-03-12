@@ -60,6 +60,9 @@ export default function MqttControlPage() {
           title: "MQTT 연결 성공",
           description: "MQTT 브로커에 연결되었습니다."
         });
+        
+        // 연결 시 서버에서 최신 명령 기록 불러오기
+        loadCommandHistoryFromServer();
       },
       onDisconnect: () => {
         console.log("MQTT 브로커에서 연결 해제됨");
@@ -93,6 +96,39 @@ export default function MqttControlPage() {
       }
     };
   }, []);
+
+  // 서버에서 명령 기록 불러오기
+  const loadCommandHistoryFromServer = async () => {
+    try {
+      const response = await fetch('/api/state');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.commandHistory) {
+          setCommandHistory(data.data.commandHistory);
+          console.log('서버에서 명령 기록을 불러왔습니다.');
+        }
+      }
+    } catch (error) {
+      console.error('서버에서 명령 기록 불러오기 실패:', error);
+    }
+  };
+
+  // 서버에 명령 기록 저장
+  const saveCommandHistoryToServer = async (history: Array<{command: string, timestamp: number}>) => {
+    try {
+      const response = await fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commandHistory: history })
+      });
+      
+      if (!response.ok) {
+        console.error('서버에 명령 기록 저장 실패:', response.status);
+      }
+    } catch (error) {
+      console.error('서버에 명령 기록 저장 중 오류:', error);
+    }
+  };
 
   // 명령 미리보기 생성
   useEffect(() => {
@@ -155,10 +191,15 @@ export default function MqttControlPage() {
       mqttClient.publish(topic, payload);
       
       // 명령 기록 추가
-      setCommandHistory(prev => [
+      const updatedHistory = [
         {command: payload, timestamp: Date.now()},
-        ...prev.slice(0, 9) // 최근 10개만 유지
-      ]);
+        ...commandHistory.slice(0, 9) // 최근 10개만 유지
+      ];
+      
+      setCommandHistory(updatedHistory);
+      
+      // 서버에 명령 기록 저장
+      saveCommandHistoryToServer(updatedHistory);
       
       toast({
         title: "명령 발송 성공",

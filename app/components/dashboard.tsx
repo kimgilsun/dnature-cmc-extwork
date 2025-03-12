@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -50,6 +50,48 @@ const TankSystem = dynamic(
   }
 )
 
+// 서버에 상태 저장
+const saveStateToServer = async (state: any) => {
+  if (typeof window !== 'undefined' && window.navigator.onLine) {
+    try {
+      const response = await fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state)
+      });
+      
+      if (!response.ok) {
+        console.error('서버 상태 저장 실패:', response.status);
+      }
+      
+      return response.ok;
+    } catch (error) {
+      console.error('서버 상태 저장 중 오류:', error);
+      return false;
+    }
+  }
+  return false;
+};
+
+// 서버에서 상태 불러오기
+const loadStateFromServer = async () => {
+  if (typeof window !== 'undefined' && window.navigator.onLine) {
+    try {
+      const response = await fetch('/api/state');
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.data;
+      } else {
+        console.error('서버 상태 불러오기 실패:', response.status);
+      }
+    } catch (error) {
+      console.error('서버 상태 불러오기 중 오류:', error);
+    }
+  }
+  return null;
+};
+
 export default function Dashboard() {
   const [topic, setTopic] = useState(VALVE_INPUT_TOPIC)
   const [message, setMessage] = useState("")
@@ -72,6 +114,9 @@ export default function Dashboard() {
   // 기본 탱크 시스템 데이터로 초기화 (6개 탱크)
   const [tankData, setTankData] = useState<TankSystemData>(getDefaultTankSystemData(6))
 
+  // 첫 렌더링 여부 추적
+  const isFirstRender = useRef(true);
+
   // 로컬 스토리지에서 이전 밸브 상태 로드
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -93,6 +138,36 @@ export default function Dashboard() {
       }
     }
   }, []);
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    // 서버에서 초기 상태 로드
+    const loadInitialState = async () => {
+      const serverState = await loadStateFromServer();
+      
+      if (serverState) {
+        console.log('서버에서 상태 로드 성공');
+        // 서버 상태로 탱크 데이터 업데이트
+        setTankData(serverState);
+      } else {
+        console.log('서버 상태 없음, 기본값 사용');
+      }
+    };
+    
+    loadInitialState();
+  }, []);
+
+  // 상태 변경 시 서버에 저장
+  useEffect(() => {
+    // 첫 렌더링 시에는 저장하지 않음
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    // 상태 변경 시 서버에 저장
+    saveStateToServer(tankData);
+  }, [tankData]);
 
   // MQTT 클라이언트 초기화
   useEffect(() => {
@@ -200,7 +275,13 @@ export default function Dashboard() {
           return tank
         })
 
-        return { ...prev, tanks: updatedTanks }
+        // 업데이트된 상태
+        const updatedState = { ...prev, tanks: updatedTanks }
+        
+        // 변경된 상태를 서버에 저장
+        saveStateToServer(updatedState)
+        
+        return updatedState
       })
       return
     }
@@ -520,7 +601,13 @@ export default function Dashboard() {
         }
         return tank;
       });
-      return { ...prev, tanks: updatedTanks };
+      
+      const updatedState = { ...prev, tanks: updatedTanks };
+      
+      // 서버에 상태 저장
+      saveStateToServer(updatedState);
+      
+      return updatedState;
     });
   };
   
