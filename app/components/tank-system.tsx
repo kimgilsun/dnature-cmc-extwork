@@ -1565,21 +1565,21 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* K 스위치 - 1번 탱크 우측 중간 위쪽으로 이동 */}
+                {/* K 스위치 - 1번 탱크 벽에 가깝게 배치 */}
                 <g 
                   className="cursor-pointer"
                   onClick={() => onPumpKCommand && onPumpKCommand(1)}
                   style={{ zIndex: 50 }}
                 >
                   <circle
-                    cx={tankPositions[0].x + 80}
-                    cy={tankPositions[0].y - 20}
+                    cx={tankPositions[0].x + tankWidth/2 - 20}
+                    cy={tankPositions[0].y}
                     r={15}
                     className="fill-blue-100 stroke-blue-300 stroke-2"
                   />
                   <text
-                    x={tankPositions[0].x + 80}
-                    y={tankPositions[0].y - 16}
+                    x={tankPositions[0].x + tankWidth/2 - 20}
+                    y={tankPositions[0].y + 4}
                     textAnchor="middle"
                     className="text-blue-500 font-bold text-sm"
                   >
@@ -1935,7 +1935,7 @@ export default function TankSystem({
               x="-60"
               y="-130"
               width="120"
-              height="176"
+              height="185"
               rx="10"
               className="fill-gray-50/70 stroke-gray-200 stroke-2"
             />
@@ -2050,7 +2050,7 @@ export default function TankSystem({
                 x="-60"
                 y="-130"
                 width="120"
-                height="176"
+                height="185"
                 rx="10"
                 className="fill-gray-50/70 stroke-gray-200 stroke-2"
               />
