@@ -968,42 +968,40 @@ export default function TankSystem({
           
           return (
             <div key={`pump-control-${pumpNum}`} className="flex flex-col items-center">
-              <div className="text-[10px] font-semibold text-gray-700 mb-1">펌프 {pumpNum}</div>
-              <div className="flex items-center space-x-1">
-                <button 
-                  className={`px-2 py-1 rounded text-[10px] ${
-                    pumpStatus === "ON" 
-                      ? 'bg-green-100 text-green-700 border border-green-300' 
-                      : 'bg-red-100 text-red-700 border border-red-300'
-                  }`}
-                  onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
-                >
-                  {pumpStatus}
-                </button>
-                <button 
-                  className="px-2 py-1 rounded text-[10px] bg-red-100 text-red-700 border border-red-300"
-                  onClick={() => {
-                    if (onPumpReset) {
-                      onPumpReset(pumpNum);
-                      // MQTT 메시지 발행
-                      if (mqttClient) {
-                        mqttClient.publish(`extwork/inverter${pumpNum}/command`, "reset");
-                        // 알림 발행
-                        const notification = {
-                          type: 'pump-reset',
-                          pumpId: pumpNum,
-                          timestamp: Date.now(),
-                          clientId: clientId.current,
-                          message: `펌프 ${pumpNum} 리셋 명령이 실행되었습니다.`
-                        };
-                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                      }
+              <button 
+                className="mb-1 px-2 py-1 rounded text-[10px] bg-red-100 text-red-700 border border-red-300"
+                onClick={() => {
+                  if (onPumpReset) {
+                    onPumpReset(pumpNum);
+                    // "3" 명령 발행
+                    if (mqttClient) {
+                      const pumpTopic = `extwork/pump${pumpNum}/cmd`;
+                      mqttClient.publish(pumpTopic, "3");
+                      // 알림 발행
+                      const notification = {
+                        type: 'pump-reset',
+                        pumpId: pumpNum,
+                        timestamp: Date.now(),
+                        clientId: clientId.current,
+                        message: `펌프 ${pumpNum} 리셋 명령(3)이 실행되었습니다.`
+                      };
+                      mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
                     }
-                  }}
-                >
-                  R
-                </button>
-              </div>
+                  }
+                }}
+              >
+                R
+              </button>
+              <button 
+                className={`px-4 py-1 rounded text-[10px] ${
+                  pumpStatus === "ON" 
+                    ? 'bg-green-100 text-green-700 border border-green-300' 
+                    : 'bg-red-100 text-red-700 border border-red-300'
+                }`}
+                onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
+              >
+                펌프 {pumpNum}: {pumpStatus}
+              </button>
             </div>
           )
         })}
