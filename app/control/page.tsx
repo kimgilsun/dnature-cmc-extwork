@@ -1,18 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// sonner 대신 간단한 알림 함수 사용
-// import { toast } from "sonner";
-// import { Toaster } from "@/components/ui/sonner";
 import MqttClient from "@/lib/mqtt-client";
 
 // 간단한 알림 함수 정의
@@ -209,303 +197,208 @@ export default function MqttControlPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6 text-center">MQTT 제어 페이지</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4 text-center">MQTT 제어 페이지</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* 좌측: 펌프 제어 */}
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>펌프 제어</CardTitle>
-              <CardDescription>
-                활성화할 펌프를 선택하고 작동 파라미터를 설정하세요
-              </CardDescription>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-6">
-                {/* 펌프 ON/OFF 스위치 */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">펌프 ON/OFF</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {pumpStatus.map((status, index) => (
-                      <div key={`pump-${index+1}`} className="flex items-center space-x-3 border p-3 rounded-md">
-                        <Switch
-                          id={`pump-${index+1}`}
-                          checked={status}
-                          onCheckedChange={() => togglePump(index)}
-                        />
-                        <Label htmlFor={`pump-${index+1}`} className="font-medium">
-                          펌프 {index+1}
-                          <Badge className={`ml-2 ${status ? 'bg-green-500' : 'bg-gray-300'}`}>
-                            {status ? 'ON' : 'OFF'}
-                          </Badge>
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* 모드 선택 */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">모드 선택</h3>
-                  <Select value={selectedMode} onValueChange={setSelectedMode}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="작동 모드 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MODES.map(mode => (
-                        <SelectItem key={mode.id} value={mode.id}>
-                          {mode.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* 시간 설정 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">펌프 가동 시간 (초)</h3>
-                    <div className="space-y-2">
-                      <Slider
-                        value={[pumpRunTime]}
-                        min={1}
-                        max={300}
-                        step={1}
-                        onValueChange={(value: number[]) => setPumpRunTime(value[0])}
-                      />
-                      <div className="flex justify-between">
-                        <span>1초</span>
-                        <span className="font-bold">{pumpRunTime}초</span>
-                        <span>300초</span>
-                      </div>
-                      <Input
-                        type="number"
-                        value={pumpRunTime}
-                        onChange={(e) => setPumpRunTime(Number(e.target.value))}
-                        min={1}
-                        max={300}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">대기 시간 (초)</h3>
-                    <div className="space-y-2">
-                      <Slider
-                        value={[waitTime]}
-                        min={0}
-                        max={300}
-                        step={1}
-                        onValueChange={(value: number[]) => setWaitTime(value[0])}
-                      />
-                      <div className="flex justify-between">
-                        <span>0초</span>
-                        <span className="font-bold">{waitTime}초</span>
-                        <span>300초</span>
-                      </div>
-                      <Input
-                        type="number"
-                        value={waitTime}
-                        onChange={(e) => setWaitTime(Number(e.target.value))}
-                        min={0}
-                        max={300}
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                {/* 반복 설정 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">개별 반복 횟수</h3>
-                    <div className="space-y-2">
-                      <Slider
-                        value={[individualRepeat]}
-                        min={1}
-                        max={50}
-                        step={1}
-                        onValueChange={(value: number[]) => setIndividualRepeat(value[0])}
-                      />
-                      <div className="flex justify-between">
-                        <span>1회</span>
-                        <span className="font-bold">{individualRepeat}회</span>
-                        <span>50회</span>
-                      </div>
-                      <Input
-                        type="number"
-                        value={individualRepeat}
-                        onChange={(e) => setIndividualRepeat(Number(e.target.value))}
-                        min={1}
-                        max={50}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">전체 반복 횟수</h3>
-                    <div className="space-y-2">
-                      <Slider
-                        value={[totalRepeat]}
-                        min={1}
-                        max={50}
-                        step={1}
-                        onValueChange={(value: number[]) => setTotalRepeat(value[0])}
-                      />
-                      <div className="flex justify-between">
-                        <span>1회</span>
-                        <span className="font-bold">{totalRepeat}회</span>
-                        <span>50회</span>
-                      </div>
-                      <Input
-                        type="number"
-                        value={totalRepeat}
-                        onChange={(e) => setTotalRepeat(Number(e.target.value))}
-                        min={1}
-                        max={50}
-                      />
-                    </div>
-                  </div>
-                </div>
+      <div className="bg-white p-4 mb-4 rounded shadow">
+        <h2 className="text-xl mb-2">펌프 제어</h2>
+        <p className="mb-4">활성화할 펌프를 선택하고 작동 파라미터를 설정하세요</p>
+        
+        {/* 펌프 ON/OFF 체크박스 */}
+        <div className="mb-4">
+          <h3 className="font-bold mb-2">펌프 ON/OFF</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {pumpStatus.map((status, index) => (
+              <div key={`pump-${index+1}`} className="flex items-center border p-2 rounded">
+                <input
+                  type="checkbox"
+                  id={`pump-${index+1}`}
+                  checked={status}
+                  onChange={() => togglePump(index)}
+                  className="mr-2"
+                />
+                <label htmlFor={`pump-${index+1}`}>
+                  펌프 {index+1}: {status ? 'ON' : 'OFF'}
+                </label>
               </div>
-            </CardContent>
-            
-            <CardFooter>
-              <Button 
-                className="w-full" 
-                size="lg" 
-                disabled={!isConnected}
-                onClick={sendCommand}
-              >
-                명령 발송
-              </Button>
-            </CardFooter>
-          </Card>
+            ))}
+          </div>
         </div>
         
-        {/* 우측: 명령 미리보기 및 토픽 정보 */}
-        <div>
-          <Tabs defaultValue="preview">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="preview">명령 미리보기</TabsTrigger>
-              <TabsTrigger value="history">명령 기록</TabsTrigger>
-              <TabsTrigger value="topics">토픽 정보</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="preview">
-              <Card>
-                <CardHeader>
-                  <CardTitle>JSON 명령 미리보기</CardTitle>
-                  <CardDescription>
-                    "extwork/extraction/input" 토픽으로 발송될 명령입니다
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <pre className="bg-gray-100 p-4 rounded-md overflow-auto max-h-[400px] text-sm">
-                    {commandPreview}
-                  </pre>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle>명령 발송 기록</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4 max-h-[400px] overflow-auto">
-                    {commandHistory.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4">아직 발송된 명령이 없습니다</p>
-                    ) : (
-                      commandHistory.map((item, index) => (
-                        <div key={index} className="border p-3 rounded-md">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {new Date(item.timestamp).toLocaleString()}
-                          </div>
-                          <pre className="text-xs bg-gray-100 p-2 rounded-md overflow-auto">
-                            {JSON.stringify(JSON.parse(item.command), null, 2)}
-                          </pre>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="topics">
-              <Card>
-                <CardHeader>
-                  <CardTitle>토픽 정보</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="border p-3 rounded-md">
-                      <h3 className="font-bold">명령 발송 토픽</h3>
-                      <code className="bg-gray-100 p-1 rounded text-sm block mt-1">
-                        extwork/extraction/input
-                      </code>
-                      <p className="text-sm mt-2">
-                        펌프 제어 명령이 JSON 형식으로 이 토픽에 발송됩니다.
-                      </p>
-                    </div>
-                    
-                    <div className="border p-3 rounded-md">
-                      <h3 className="font-bold">펌프 상태 토픽</h3>
-                      <code className="bg-gray-100 p-1 rounded text-sm block mt-1">
-                        extwork/inverter{"{number}"}/state
-                      </code>
-                      <p className="text-sm mt-2">
-                        각 펌프(인버터)의 현재 상태가 이 토픽으로 발행됩니다.
-                      </p>
-                    </div>
-                    
-                    <div className="border p-3 rounded-md">
-                      <h3 className="font-bold">펌프 명령 토픽</h3>
-                      <code className="bg-gray-100 p-1 rounded text-sm block mt-1">
-                        extwork/pump{"{number}"}/cmd
-                      </code>
-                      <p className="text-sm mt-2">
-                        개별 펌프에 명령을 직접 전송하는 토픽입니다.
-                      </p>
-                    </div>
-                    
-                    <div className="border p-3 rounded-md">
-                      <h3 className="font-bold">시스템 상태 토픽</h3>
-                      <code className="bg-gray-100 p-1 rounded text-sm block mt-1">
-                        tank-system/state
-                      </code>
-                      <p className="text-sm mt-2">
-                        전체 시스템의 상태 정보가 이 토픽으로 발행됩니다.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+        {/* 모드 선택 */}
+        <div className="mb-4">
+          <h3 className="font-bold mb-2">모드 선택</h3>
+          <select 
+            value={selectedMode} 
+            onChange={e => setSelectedMode(e.target.value)}
+            className="w-full p-2 border rounded"
+          >
+            {MODES.map(mode => (
+              <option key={mode.id} value={mode.id}>
+                {mode.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        {/* 시간 설정 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <h3 className="font-bold mb-2">펌프 가동 시간 (초)</h3>
+            <input
+              type="range"
+              min={1}
+              max={300}
+              value={pumpRunTime}
+              onChange={e => setPumpRunTime(Number(e.target.value))}
+              className="w-full mb-2"
+            />
+            <div className="flex justify-between text-sm">
+              <span>1초</span>
+              <span className="font-bold">{pumpRunTime}초</span>
+              <span>300초</span>
+            </div>
+            <input
+              type="number"
+              value={pumpRunTime}
+              onChange={e => setPumpRunTime(Number(e.target.value))}
+              min={1}
+              max={300}
+              className="w-full p-2 border rounded mt-2"
+            />
+          </div>
           
-          <div className="mt-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">MQTT 연결 상태</p>
-                    <p className="text-sm text-gray-500">
-                      {isConnected ? "브로커에 연결됨" : "연결 안됨"}
-                    </p>
+          <div>
+            <h3 className="font-bold mb-2">대기 시간 (초)</h3>
+            <input
+              type="range"
+              min={0}
+              max={300}
+              value={waitTime}
+              onChange={e => setWaitTime(Number(e.target.value))}
+              className="w-full mb-2"
+            />
+            <div className="flex justify-between text-sm">
+              <span>0초</span>
+              <span className="font-bold">{waitTime}초</span>
+              <span>300초</span>
+            </div>
+            <input
+              type="number"
+              value={waitTime}
+              onChange={e => setWaitTime(Number(e.target.value))}
+              min={0}
+              max={300}
+              className="w-full p-2 border rounded mt-2"
+            />
+          </div>
+        </div>
+        
+        {/* 반복 설정 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <h3 className="font-bold mb-2">개별 반복 횟수</h3>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              value={individualRepeat}
+              onChange={e => setIndividualRepeat(Number(e.target.value))}
+              className="w-full mb-2"
+            />
+            <div className="flex justify-between text-sm">
+              <span>1회</span>
+              <span className="font-bold">{individualRepeat}회</span>
+              <span>50회</span>
+            </div>
+            <input
+              type="number"
+              value={individualRepeat}
+              onChange={e => setIndividualRepeat(Number(e.target.value))}
+              min={1}
+              max={50}
+              className="w-full p-2 border rounded mt-2"
+            />
+          </div>
+          
+          <div>
+            <h3 className="font-bold mb-2">전체 반복 횟수</h3>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              value={totalRepeat}
+              onChange={e => setTotalRepeat(Number(e.target.value))}
+              className="w-full mb-2"
+            />
+            <div className="flex justify-between text-sm">
+              <span>1회</span>
+              <span className="font-bold">{totalRepeat}회</span>
+              <span>50회</span>
+            </div>
+            <input
+              type="number"
+              value={totalRepeat}
+              onChange={e => setTotalRepeat(Number(e.target.value))}
+              min={1}
+              max={50}
+              className="w-full p-2 border rounded mt-2"
+            />
+          </div>
+        </div>
+        
+        <button 
+          className={`w-full p-2 rounded text-white font-bold ${isConnected ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400'}`}
+          disabled={!isConnected}
+          onClick={sendCommand}
+        >
+          명령 발송
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 명령 미리보기 */}
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-xl mb-2">JSON 명령 미리보기</h2>
+          <p className="text-sm text-gray-600 mb-2">"extwork/extraction/input" 토픽으로 발송될 명령입니다</p>
+          <pre className="bg-gray-100 p-4 rounded overflow-auto max-h-[300px] text-sm">
+            {commandPreview}
+          </pre>
+        </div>
+        
+        {/* 명령 기록 */}
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-xl mb-2">명령 발송 기록</h2>
+          <div className="space-y-2 max-h-[300px] overflow-auto">
+            {commandHistory.length === 0 ? (
+              <p className="text-gray-500 text-center p-4">아직 발송된 명령이 없습니다</p>
+            ) : (
+              commandHistory.map((item, index) => (
+                <div key={index} className="border p-2 rounded text-sm">
+                  <div className="text-xs text-gray-500 mb-1">
+                    {new Date(item.timestamp).toLocaleString()}
                   </div>
-                  <Badge
-                    className={isConnected ? "bg-green-500" : "bg-red-500"}
-                  >
-                    {isConnected ? "온라인" : "오프라인"}
-                  </Badge>
+                  <pre className="bg-gray-100 p-2 rounded overflow-auto text-xs">
+                    {JSON.stringify(JSON.parse(item.command), null, 2)}
+                  </pre>
                 </div>
-              </CardContent>
-            </Card>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* 연결 상태 표시 */}
+      <div className="mt-4 bg-white p-4 rounded shadow">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="font-bold">MQTT 연결 상태</p>
+            <p className="text-sm text-gray-600">
+              {isConnected ? "브로커에 연결됨" : "연결 안됨"}
+            </p>
+          </div>
+          <div className={`px-3 py-1 rounded-full text-white ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}>
+            {isConnected ? "온라인" : "오프라인"}
           </div>
         </div>
       </div>

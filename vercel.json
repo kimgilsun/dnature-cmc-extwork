@@ -6,13 +6,20 @@
       "use": "@vercel/next",
       "config": {
         "installCommand": "npm install --force",
-        "buildCommand": "npm run build"
+        "buildCommand": "npm run build",
+        "zeroConfig": true
       }
     }
   ],
   "github": {
     "enabled": true,
-    "silent": false
+    "silent": false,
+    "autoAlias": true
   },
-  "installCommand": "npm install --force"
+  "installCommand": "npm install --force",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
 } 
