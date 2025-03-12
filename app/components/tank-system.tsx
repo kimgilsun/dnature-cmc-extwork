@@ -598,23 +598,23 @@ export default function TankSystem({
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브(밸브2)에서 본탱크로의 경로 - 밸브 상태에 따라 표시 여부 결정 */}
+        {/* 3way 밸브(밸브2)에서 본탱크로의 경로 - 항상 표시 */}
         <path
           d={calculate3wayToMainPath()}
-          className={`stroke-[12] ${shouldShowLine("tank6ToMain") ? (isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300") : "stroke-transparent"}`}
+          className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
 
-        {/* 본탱크에서 2way 밸브(밸브1)로의 경로 */}
+        {/* 본탱크에서 2way 밸브(밸브1)로의 경로 - 항상 표시 */}
         <path
           d={calculateMainToTank1Path()}
-          className={`stroke-[12] ${(valve2 === 1) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${valve2 === 1 ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
 
-        {/* 2way 밸브(밸브1)에서 펌프1 입구 쪽으로의 경로 */}
+        {/* 2way 밸브(밸브1)에서 펌프1 입구 쪽으로의 경로 - 항상 표시 */}
         <path
           d={calculate2wayToPump1Path()}
           className={`stroke-[12] ${(valve2 === 1 && isPipeActive(0)) ? "stroke-blue-500" : "stroke-gray-300"}`}
