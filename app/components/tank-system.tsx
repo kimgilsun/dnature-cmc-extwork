@@ -1374,9 +1374,9 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
-      <svg viewBox="0 0 1000 650" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <svg viewBox="0 0 1000 700" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 - 아래로 더 내려서 k 스위치까지 보이게 함 */}
-        <g transform="translate(0, -20) scale(0.75)">
+        <g transform="translate(0, 20) scale(0.75)">
           {/* 본탱크 - 너비 확대, 높이 감소 */}
           <rect
             x={mainTankPosition.x - mainTankPosition.width / 2}
@@ -1565,25 +1565,25 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* K 스위치 - 1번 탱크 우측 상단에 배치 */}
+                {/* K 스위치 - 크게 만들고 위치 조정하여 확실히 보이게 함 */}
                 <g 
                   className="cursor-pointer"
                   onClick={() => onPumpKCommand && onPumpKCommand(1)}
-                  style={{ zIndex: 50 }}
+                  style={{ zIndex: 100 }}
                 >
                   <circle
-                    cx={tankPositions[0].x + tankWidth/2 - 15}
-                    cy={tankPositions[0].y - tankHeight/2 + 20}
-                    r={15}
-                    className="fill-blue-100 stroke-blue-300 stroke-2"
+                    cx={tankPositions[0].x + 50}
+                    cy={tankPositions[0].y - 70}
+                    r={22}
+                    className="fill-blue-500 stroke-blue-700 stroke-2"
                   />
                   <text
-                    x={tankPositions[0].x + tankWidth/2 - 15}
-                    y={tankPositions[0].y - tankHeight/2 + 24}
+                    x={tankPositions[0].x + 50}
+                    y={tankPositions[0].y - 64}
                     textAnchor="middle"
-                    className="text-blue-500 font-bold text-sm"
+                    className="text-white font-bold text-lg"
                   >
-                    k
+                    K
                   </text>
                 </g>
                 
