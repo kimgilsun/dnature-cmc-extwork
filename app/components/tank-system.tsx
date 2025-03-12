@@ -938,10 +938,40 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
-      {/* 연결 상태 표시 동그라미 추가 */}
-      <div className="absolute top-2 right-2 flex items-center space-x-2">
-        <div className={`w-4 h-4 rounded-full ${connectionStatus.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-        <span className="text-xs font-medium">{connectionStatus.connected ? '연결됨' : '연결 안됨'}</span>
+      {/* 펌프 리셋 버튼 추가 */}
+      <div className="flex flex-wrap justify-center space-x-2 mt-2 mb-2 p-2">
+        {Array(6).fill(0).map((_, i) => {
+          const pumpId = i + 1;
+          return (
+            <button 
+              key={`pump-reset-btn-${pumpId}`}
+              className="px-3 py-1 rounded text-xs font-bold bg-black text-white hover:bg-gray-800"
+              onClick={() => {
+                if (onPumpReset) {
+                  onPumpReset(pumpId);
+                }
+                
+                if (mqttClient) {
+                  const pumpTopic = `extwork/pump${pumpId}/cmd`;
+                  mqttClient.publish(pumpTopic, "3");
+                  
+                  // 알림 발행
+                  const notification = {
+                    type: 'pump-reset',
+                    pumpId,
+                    timestamp: Date.now(),
+                    clientId: clientId.current,
+                    message: `펌프 ${pumpId} 리셋 명령(3)이 실행되었습니다.`
+                  };
+                  
+                  mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+                }
+              }}
+            >
+              펌프{pumpId}-리셋
+            </button>
+          );
+        })}
       </div>
       
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
