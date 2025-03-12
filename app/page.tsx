@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 
 // 클라이언트 사이드에서만 렌더링되도록 동적 임포트
 const DynamicDashboard = dynamic(
-  () => import("@/components/dashboard"),
+  () => import("@/app/components/dashboard"),
   { 
     ssr: false, // 서버 사이드 렌더링 비활성화
     loading: () => <div className="flex min-h-screen items-center justify-center">
