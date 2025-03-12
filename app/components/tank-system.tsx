@@ -1,22 +1,39 @@
 "use client"
 import { motion } from "framer-motion"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { MqttClient } from "mqtt"
 import { cn } from '@/lib/utils';
 import "./tank-system.css"; // 새로 생성한 CSS 파일 import
 
-// localStorage 래퍼 함수 추가 - 브라우저 환경에서만 동작
-const getLocalStorage = (key: string): string | null => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem(key);
-  }
-  return null;
+// 고유 클라이언트 ID 생성 함수
+const generateClientId = () => {
+  if (typeof window === 'undefined') return 'server';
+  return `client_${Math.random().toString(36).substring(2, 15)}`;
 };
 
-const setLocalStorage = (key: string, value: string): void => {
+// 시스템 상태 저장 및 불러오기 함수
+const saveSystemState = (state: any) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(key, value);
+    localStorage.setItem('tankSystemState', JSON.stringify({
+      ...state,
+      timestamp: Date.now(),
+      version: '1.0'
+    }));
   }
+};
+
+const loadSystemState = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const savedState = localStorage.getItem('tankSystemState');
+      if (savedState) {
+        return JSON.parse(savedState);
+      }
+    } catch (error) {
+      console.error('상태 불러오기 실패:', error);
+    }
+  }
+  return null;
 };
 
 interface Tank {
@@ -45,12 +62,20 @@ interface TankSystemProps {
   onPumpReset?: (pumpId: number) => void   // 펌프 리셋 함수 추가
   onPumpKCommand?: (pumpId: number) => void // K 명령 발행 함수 추가
   pumpStateMessages?: Record<number, string> // 펌프 상태 메시지
+  mqttClient?: MqttClient // MQTT 클라이언트 추가
 }
 
 // 추출 진행 메시지를 위한 인터페이스
 interface ExtractionProgress {
   timestamp: number
   message: string
+}
+
+// 연결 상태를 위한 인터페이스
+interface ConnectionStatus {
+  connected: boolean
+  lastConnected: Date | null
+  reconnecting: boolean
 }
 
 // 펄스 애니메이션을 위한 스타일 추가
@@ -75,7 +100,8 @@ export default function TankSystem({
   onPumpToggle, 
   onPumpReset,
   onPumpKCommand,
-  pumpStateMessages = {}
+  pumpStateMessages = {},
+  mqttClient
 }: TankSystemProps) {
   // 애니메이션을 위한 상태 추가
   const [fillPercentage, setFillPercentage] = useState<number>(0);
@@ -84,23 +110,165 @@ export default function TankSystem({
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [currentPressedPump, setCurrentPressedPump] = useState<number | null>(null);
   
-  // 컴포넌트 마운트 시 localStorage에서 저장된 밸브 상태를 복원하고 서버에 전송
-  useEffect(() => {
-    // 클라이언트 사이드에서만 실행되도록 래퍼 함수 사용
-    const savedValveState = getLocalStorage('valveState');
-    // localStorage에 저장된 상태가 있고, 현재 상태와 다른 경우에만 서버에 전송
-    if (savedValveState && savedValveState !== tankData.valveState && onValveChange) {
-      console.log('localStorage에서 밸브 상태 복원 및 서버에 전송:', savedValveState);
-      // 상태 전송 시간 지연 (1초 후 실행)
-      const timer = setTimeout(() => {
-        onValveChange(savedValveState);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [tankData.valveState, onValveChange]);
+  // 클라이언트 ID 상태 추가
+  const clientId = useRef(generateClientId());
   
-  // 펌프 버튼 마우스 다운 핸들러
+  // 마지막 상태 업데이트 시간
+  const [lastStateUpdate, setLastStateUpdate] = useState<Date | null>(null);
+  
+  // 연결 상태 추가
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    connected: !!mqttClient?.connected,
+    lastConnected: null,
+    reconnecting: false
+  });
+  
+  // 상태 변경 알림을 위한 상태
+  const [notifications, setNotifications] = useState<Array<{
+    message: string,
+    timestamp: number,
+    source?: string
+  }>>([]);
+
+  // MQTT 클라이언트 연결 상태 모니터링
+  useEffect(() => {
+    if (!mqttClient) return;
+    
+    const handleConnect = () => {
+      console.log('MQTT 브로커에 연결됨');
+      setConnectionStatus({
+        connected: true,
+        lastConnected: new Date(),
+        reconnecting: false
+      });
+      
+      // 연결 시 상태 토픽 구독
+      mqttClient.subscribe('tank-system/state');
+      mqttClient.subscribe('tank-system/valve-state');
+      mqttClient.subscribe('tank-system/notifications');
+      
+      // 상태 요청 메시지 발행
+      mqttClient.publish('tank-system/request', JSON.stringify({
+        clientId: clientId.current,
+        timestamp: Date.now(),
+        requestType: 'full-state'
+      }));
+    };
+    
+    const handleDisconnect = () => {
+      console.log('MQTT 브로커 연결 끊김');
+      setConnectionStatus(prev => ({
+        ...prev,
+        connected: false,
+        reconnecting: true
+      }));
+    };
+    
+    // 연결 이벤트 리스너 등록
+    mqttClient.on('connect', handleConnect);
+    mqttClient.on('disconnect', handleDisconnect);
+    
+    // 이미 연결된 경우 상태 업데이트
+    if (mqttClient.connected) {
+      handleConnect();
+    }
+    
+    return () => {
+      mqttClient.off('connect', handleConnect);
+      mqttClient.off('disconnect', handleDisconnect);
+    };
+  }, [mqttClient]);
+  
+  // MQTT 메시지 수신 처리
+  useEffect(() => {
+    if (!mqttClient) return;
+    
+    const handleMessage = (topic: string, message: Buffer) => {
+      const messageStr = message.toString();
+      console.log(`메시지 수신: ${topic} - ${messageStr}`);
+      
+      try {
+        // 토픽에 따른 처리
+        if (topic === 'tank-system/notifications') {
+          const notification = JSON.parse(messageStr);
+          
+          // 자신이 발생시킨 알림이 아닌 경우에만 처리
+          if (notification.clientId !== clientId.current) {
+            setNotifications(prev => [
+              ...prev,
+              {
+                message: notification.message,
+                timestamp: notification.timestamp,
+                source: notification.clientId
+              }
+            ]);
+            
+            // 5초 후 알림 제거
+            setTimeout(() => {
+              setNotifications(prev => 
+                prev.filter(n => n.timestamp !== notification.timestamp)
+              );
+            }, 5000);
+          }
+        }
+        
+        // 상태 업데이트 시간 기록
+        setLastStateUpdate(new Date());
+        
+        // 상태 변경 시 로컬에 저장
+        if (tankData) {
+          saveSystemState(tankData);
+        }
+      } catch (error) {
+        console.error('메시지 처리 오류:', error);
+      }
+    };
+    
+    mqttClient.on('message', handleMessage);
+    
+    return () => {
+      mqttClient.off('message', handleMessage);
+    };
+  }, [mqttClient, tankData]);
+  
+  // 컴포넌트 마운트 시 저장된 상태 복원
+  useEffect(() => {
+    const savedState = loadSystemState();
+    if (savedState && savedState.timestamp) {
+      // 마지막 저장 시간 표시
+      setLastStateUpdate(new Date(savedState.timestamp));
+    }
+  }, []);
+  
+  // 밸브 상태 변경 핸들러 - MQTT 알림 추가
+  const handleValveChange = (newState: string) => {
+    // 상태 변경 요청
+    onValveChange(newState);
+    
+    // MQTT를 통한 알림 발행
+    if (mqttClient) {
+      const notification = {
+        type: 'valve-change',
+        valveState: newState,
+        timestamp: Date.now(),
+        clientId: clientId.current,
+        message: `밸브 상태가 변경되었습니다: ${newState}`
+      };
+      
+      mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+    }
+    
+    // 상태 변경 시간 업데이트
+    setLastStateUpdate(new Date());
+    
+    // 상태 저장
+    saveSystemState({
+      ...tankData,
+      valveState: newState
+    });
+  };
+  
+  // 펌프 버튼 마우스 다운 핸들러 - MQTT 알림 추가
   const handlePumpMouseDown = (pumpId: number) => {
     setCurrentPressedPump(pumpId);
     
@@ -109,6 +277,19 @@ export default function TankSystem({
       console.log(`펌프 ${pumpId} 길게 누름 감지 - 리셋 명령 실행`);
       if (onPumpReset) {
         onPumpReset(pumpId);
+        
+        // MQTT를 통한 알림 발행
+        if (mqttClient) {
+          const notification = {
+            type: 'pump-reset',
+            pumpId,
+            timestamp: Date.now(),
+            clientId: clientId.current,
+            message: `펌프 ${pumpId} 리셋 명령이 실행되었습니다.`
+          };
+          
+          mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+        }
       }
       setCurrentPressedPump(null);
     }, 3000);
@@ -116,7 +297,7 @@ export default function TankSystem({
     setLongPressTimer(timer);
   };
   
-  // 펌프 버튼 마우스 업 핸들러
+  // 펌프 버튼 마우스 업 핸들러 - MQTT 알림 추가
   const handlePumpMouseUp = (pumpId: number) => {
     // 타이머가 있으면 취소 (길게 누르기 취소)
     if (longPressTimer) {
@@ -129,6 +310,19 @@ export default function TankSystem({
       console.log(`펌프 ${pumpId} 클릭 - 토글 명령 실행`);
       if (onPumpToggle) {
         onPumpToggle(pumpId);
+        
+        // MQTT를 통한 알림 발행
+        if (mqttClient) {
+          const notification = {
+            type: 'pump-toggle',
+            pumpId,
+            timestamp: Date.now(),
+            clientId: clientId.current,
+            message: `펌프 ${pumpId} 상태가 토글되었습니다.`
+          };
+          
+          mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+        }
       }
     }
     
@@ -231,7 +425,7 @@ export default function TankSystem({
     if (tankData.valveState === '0100') {
       console.log('특수 케이스 감지: 0100 - 밸브2 OFF, 밸브1 ON');
       // localStorage에 밸브 상태 저장 (래퍼 함수 사용)
-      setLocalStorage('valveState', tankData.valveState);
+      saveSystemState(tankData);
       return {
         valve1: 0, // 밸브2 OFF (3way)
         valve2: 1, // 밸브1 ON (2way)
@@ -254,7 +448,7 @@ export default function TankSystem({
       console.log(`밸브 상태 파싱 결과: valveA=${valveAState} (${valveADesc}), valveB=${valveBState} (${valveBDesc})`);
       
       // 밸브 상태를 로컬 스토리지에 저장 (래퍼 함수 사용)
-      setLocalStorage('valveStatusMessage', tankData.valveStatusMessage);
+      saveSystemState(tankData);
       
       return {
         valve1: valveAState,
@@ -267,11 +461,11 @@ export default function TankSystem({
     // 기존 로직 유지 (fallback)
     if (tankData.valveState.length !== 4) {
       // localStorage에 저장된 상태가 있으면 사용 (래퍼 함수 사용)
-      const savedValveState = getLocalStorage('valveState');
-      if (savedValveState && savedValveState.length === 4) {
-        console.log('localStorage에서 밸브 상태 복원:', savedValveState);
-        const v1 = parseInt(savedValveState[0]);
-        const v2 = parseInt(savedValveState[1]);
+      const savedState = loadSystemState();
+      if (savedState && savedState.valveState && savedState.valveState.length === 4) {
+        console.log('localStorage에서 밸브 상태 복원:', savedState.valveState);
+        const v1 = parseInt(savedState.valveState[0]);
+        const v2 = parseInt(savedState.valveState[1]);
         return {
           valve1: v1,
           valve2: v2,
@@ -281,7 +475,7 @@ export default function TankSystem({
       }
       
       // localStorage에 저장된 밸브 상태 메시지가 있으면 사용 (래퍼 함수 사용)
-      const savedValveStatusMessage = getLocalStorage('valveStatusMessage');
+      const savedValveStatusMessage = loadSystemState()?.valveStatusMessage;
       if (savedValveStatusMessage) {
         console.log('localStorage에서 밸브 상태 메시지 복원:', savedValveStatusMessage);
         const valveAState = savedValveStatusMessage.includes('valveA=ON') ? 1 : 0;
@@ -301,7 +495,7 @@ export default function TankSystem({
     const v2 = parseInt(tankData.valveState[1]);
 
     // 현재 상태를 localStorage에 저장 (래퍼 함수 사용)
-    setLocalStorage('valveState', tankData.valveState);
+    saveSystemState(tankData);
 
     return {
       valve1: v1,
@@ -375,7 +569,10 @@ export default function TankSystem({
     else nextState = "0100"; // 기본값
     
     // 변경된 상태를 localStorage에 저장 (래퍼 함수 사용)
-    setLocalStorage('valveState', nextState);
+    saveSystemState({
+      ...tankData,
+      valveState: nextState
+    });
     console.log('다음 밸브 상태 localStorage에 저장:', nextState);
     
     return nextState;
@@ -583,6 +780,55 @@ export default function TankSystem({
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
       {/* 펄스 애니메이션 스타일 추가 */}
       <style>{pulseCss}</style>
+      
+      {/* 상태 변경 알림 UI 추가 */}
+      {notifications.length > 0 && (
+        <div className="absolute top-2 right-2 z-10 max-w-[300px] space-y-2">
+          {notifications.map((notification, idx) => (
+            <div 
+              key={`${notification.timestamp}-${idx}`}
+              className="bg-blue-50 p-2 rounded-lg border border-blue-200 text-xs shadow-sm animate-fadeIn"
+            >
+              <div className="flex justify-between">
+                <span className="text-blue-700 font-medium">시스템 알림</span>
+                <span className="text-blue-400 text-[10px]">
+                  {new Date(notification.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+              <p className="text-blue-800 mt-1">{notification.message}</p>
+              {notification.source && (
+                <p className="text-[10px] text-blue-400 mt-1">
+                  출처: {notification.source}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* 연결 상태 표시 추가 */}
+      <div className="absolute top-2 left-2 z-10">
+        <div className={`px-2 py-1 rounded text-[10px] flex items-center space-x-1 ${
+          connectionStatus.connected 
+            ? 'bg-green-50 text-green-700 border border-green-200' 
+            : 'bg-amber-50 text-amber-700 border border-amber-200'
+        }`}>
+          <div className={`w-2 h-2 rounded-full ${
+            connectionStatus.connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+          }`}></div>
+          <span>
+            {connectionStatus.connected 
+              ? '연결됨' 
+              : connectionStatus.reconnecting ? '재연결 중...' : '연결 끊김'}
+          </span>
+        </div>
+        
+        {lastStateUpdate && (
+          <div className="mt-1 bg-white/80 px-2 py-1 rounded text-[10px] text-gray-500 border border-gray-100">
+            마지막 업데이트: {lastStateUpdate.toLocaleTimeString()}
+          </div>
+        )}
+      </div>
       
       <svg viewBox="0 0 1000 800" className="w-full h-full">
         {/* 본탱크 - 원형에서 사각형으로 변경 및 크기 확대 */}
@@ -916,7 +1162,7 @@ export default function TankSystem({
 
         {/* 3way 밸브 - ON/OFF 스위치 형태로 개선 - 크기 줄임 */}
         <g
-          onClick={() => onValveChange(getNextValveState())}
+          onClick={() => handleValveChange(getNextValveState())}
           className="cursor-pointer"
           transform={`translate(${valve3wayPosition.x}, ${valve3wayPosition.y})`}
         >
