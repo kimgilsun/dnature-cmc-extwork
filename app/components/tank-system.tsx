@@ -29,6 +29,8 @@ interface TankSystemProps {
   progressMessages?: Array<{timestamp: number, message: string, rawJson?: string | null}>
   onPumpToggle?: (pumpId: number) => void  // 펌프 ON/OFF 토글 함수 추가
   onPumpReset?: (pumpId: number) => void   // 펌프 리셋 함수 추가
+  onPumpKCommand?: (pumpId: number) => void // K 명령 발행 함수 추가
+  pumpStateMessages?: Record<number, string> // 펌프 상태 메시지
 }
 
 // 추출 진행 메시지를 위한 인터페이스
@@ -52,7 +54,15 @@ const pulseCss = `
   }
 `;
 
-export default function TankSystem({ tankData, onValveChange, progressMessages = [], onPumpToggle, onPumpReset }: TankSystemProps) {
+export default function TankSystem({ 
+  tankData, 
+  onValveChange, 
+  progressMessages = [], 
+  onPumpToggle, 
+  onPumpReset,
+  onPumpKCommand,
+  pumpStateMessages = {}
+}: TankSystemProps) {
   // 애니메이션을 위한 상태 추가
   const [fillPercentage, setFillPercentage] = useState<number>(0);
   
@@ -64,14 +74,14 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
   const handlePumpMouseDown = (pumpId: number) => {
     setCurrentPressedPump(pumpId);
     
-    // 길게 누르기 감지 타이머 설정 (1초 후 리셋 명령 발생)
+    // 길게 누르기 감지 타이머 설정 (3초 후 리셋 명령 발생)
     const timer = setTimeout(() => {
       console.log(`펌프 ${pumpId} 길게 누름 감지 - 리셋 명령 실행`);
       if (onPumpReset) {
         onPumpReset(pumpId);
       }
       setCurrentPressedPump(null);
-    }, 1000);
+    }, 3000);
     
     setLongPressTimer(timer);
   };
@@ -599,7 +609,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           strokeLinecap="round"
         />
 
-        {/* 2way 밸브에서 펌프1 입구 합류 지점으로의 경로 */}
+        {/* 2way 밸브에서 펌프1 입구 쪽으로의 경로 */}
         <path
           d={calculate2wayToPump1Path()}
           className={`stroke-[12] ${(valve2 === 1 && isPipeActive(0)) ? "stroke-blue-500" : "stroke-gray-300"}`}
@@ -630,6 +640,68 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           fill="none"
           strokeLinecap="round"
         />
+
+        {/* 1번 탱크에서 2번 펌프로의 경로 */}
+        {(() => {
+          const pumpPos = calculatePumpPosition(0, 1)
+          const tank = tankData.tanks[1] // 2번 펌프 = 1번 인덱스
+          const stateMessage = pumpStateMessages[2] || '';
+          
+          return (
+            <g key="pump-2">
+              <circle
+                cx={pumpPos.x}
+                cy={pumpPos.y}
+                r={pumpRadius}
+                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                onMouseDown={() => onPumpToggle && handlePumpMouseDown(2)}
+                onMouseUp={() => onPumpToggle && handlePumpMouseUp(2)}
+                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
+                onTouchStart={() => onPumpToggle && handlePumpTouchStart(2)}
+                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(2)}
+                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+              />
+              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                IP_2
+              </text>
+              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                {tank.pumpStatus}
+              </text>
+              
+              {/* 상태 메시지 표시 */}
+              {stateMessage && (
+                <g>
+                  <rect
+                    x={pumpPos.x - 50}
+                    y={pumpPos.y + 25}
+                    width={100}
+                    height={20}
+                    rx="3"
+                    className="fill-gray-100 stroke-gray-300 stroke-1"
+                  />
+                  <text
+                    x={pumpPos.x}
+                    y={pumpPos.y + 38}
+                    textAnchor="middle"
+                    className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
+                  >
+                    {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
+                  </text>
+                </g>
+              )}
+              
+              {currentPressedPump === 2 && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 5}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
+            </g>
+          )
+        })()}
 
         {/* 탱크 1-6 */}
         {tankPositions.map((pos, index) => {
@@ -809,6 +881,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
             const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
             const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
             const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
+            const stateMessage = pumpStateMessages[pumpNum] || '';
             
             return (
               <g key={`pump-${pumpNum}`}>
@@ -832,6 +905,29 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
                   {tank.pumpStatus}
                 </text>
+                
+                {/* 상태 메시지 표시 */}
+                {stateMessage && (
+                  <g>
+                    <rect
+                      x={pumpPos.x - 50}
+                      y={pumpPos.y + 25}
+                      width={100}
+                      height={20}
+                      rx="3"
+                      className="fill-gray-100 stroke-gray-300 stroke-1"
+                    />
+                    <text
+                      x={pumpPos.x}
+                      y={pumpPos.y + 38}
+                      textAnchor="middle"
+                      className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
+                    >
+                      {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
+                    </text>
+                  </g>
+                )}
+                
                 {currentPressedPump === pumpNum && (
                   <circle
                     cx={pumpPos.x}
@@ -848,6 +944,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {(() => {
           const pumpPos = calculatePumpPosition(5, 0)
           const tank = tankData.tanks[0] // 1번 펌프 = 0번 인덱스
+          const stateMessage = pumpStateMessages[1] || '';
           
           return (
             <g key="pump-1">
@@ -870,45 +967,51 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
               <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
                 {tank.pumpStatus}
               </text>
-              {currentPressedPump === 1 && (
+              
+              {/* K 스위치 추가 */}
+              <g 
+                className="cursor-pointer"
+                onClick={() => onPumpKCommand && onPumpKCommand(1)}
+              >
                 <circle
-                  cx={pumpPos.x}
+                  cx={pumpPos.x - 40}
                   cy={pumpPos.y}
-                  r={pumpRadius + 5}
-                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                  r={12}
+                  className="fill-white stroke-blue-500 stroke-2"
                 />
+                <text
+                  x={pumpPos.x - 40}
+                  y={pumpPos.y + 4}
+                  textAnchor="middle"
+                  className="text-blue-600 font-bold text-sm"
+                >
+                  K
+                </text>
+              </g>
+              
+              {/* 상태 메시지 표시 */}
+              {stateMessage && (
+                <g>
+                  <rect
+                    x={pumpPos.x - 50}
+                    y={pumpPos.y + 25}
+                    width={100}
+                    height={20}
+                    rx="3"
+                    className="fill-gray-100 stroke-gray-300 stroke-1"
+                  />
+                  <text
+                    x={pumpPos.x}
+                    y={pumpPos.y + 38}
+                    textAnchor="middle"
+                    className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
+                  >
+                    {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
+                  </text>
+                </g>
               )}
-            </g>
-          )
-        })()}
-
-        {/* 2번 펌프 (1번과 2번 탱크 사이) - 추가 */}
-        {(() => {
-          const pumpPos = calculatePumpPosition(0, 1)
-          const tank = tankData.tanks[1] // 2번 펌프 = 1번 인덱스
-          
-          return (
-            <g key="pump-2">
-              <circle
-                cx={pumpPos.x}
-                cy={pumpPos.y}
-                r={pumpRadius}
-                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
-                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                onMouseDown={() => onPumpToggle && handlePumpMouseDown(2)}
-                onMouseUp={() => onPumpToggle && handlePumpMouseUp(2)}
-                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
-                onTouchStart={() => onPumpToggle && handlePumpTouchStart(2)}
-                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(2)}
-                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
-              />
-              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                IP_2
-              </text>
-              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                {tank.pumpStatus}
-              </text>
-              {currentPressedPump === 2 && (
+              
+              {currentPressedPump === 1 && (
                 <circle
                   cx={pumpPos.x}
                   cy={pumpPos.y}

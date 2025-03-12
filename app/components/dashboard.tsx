@@ -57,6 +57,9 @@ export default function Dashboard() {
   // 추출 진행 메시지를 저장할 상태
   const [progressMessages, setProgressMessages] = useState<Array<{timestamp: number, message: string, rawJson?: string | null}>>([])
   
+  // 펌프 overallstate 메시지를 저장할 상태 추가
+  const [pumpStateMessages, setPumpStateMessages] = useState<Record<number, string>>({});
+  
   // 기본 탱크 시스템 데이터로 초기화 (6개 탱크)
   const [tankData, setTankData] = useState<TankSystemData>(getDefaultTankSystemData(6))
 
@@ -234,6 +237,12 @@ export default function Dashboard() {
           }
         }))
       }
+      
+      // 펌프 상태 메시지 저장
+      setPumpStateMessages(prev => ({
+        ...prev,
+        [inverterId]: message
+      }));
       
       return
     }
@@ -454,7 +463,7 @@ export default function Dashboard() {
     setTankData(prev => {
       const updatedTanks = prev.tanks.map(tank => {
         if (tank.id === pumpId) {
-          return { ...tank, pumpStatus: newState };
+          return { ...tank, pumpStatus: newState as "ON" | "OFF" };
         }
         return tank;
       });
@@ -471,6 +480,17 @@ export default function Dashboard() {
     // 리셋 명령(3) 발행
     const topic = getPumpCommandTopic(pumpId);
     mqttClient.publish(topic, "3");
+  };
+  
+  // 펌프 K 명령 함수 추가
+  const sendPumpKCommand = (pumpId: number) => {
+    if (!mqttClient) return;
+    
+    console.log(`펌프 ${pumpId}에 K 명령 발행`);
+    
+    // K 명령 발행
+    const topic = getPumpCommandTopic(pumpId);
+    mqttClient.publish(topic, "K");
   };
 
   // MQTT 브로커에 연결
@@ -576,6 +596,8 @@ export default function Dashboard() {
                 progressMessages={progressMessages}
                 onPumpToggle={togglePump}
                 onPumpReset={resetPump}
+                onPumpKCommand={sendPumpKCommand}
+                pumpStateMessages={pumpStateMessages}
               />
             </CardContent>
           </Card>
