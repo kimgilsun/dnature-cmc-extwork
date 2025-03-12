@@ -354,7 +354,7 @@ export default function TankSystem({
   // 3way 밸브 위치 계산 - 6번 탱크와 본탱크 사이에 배치하되 펌프1과 교차하지 않도록
   const valve3wayPosition = {
     x: (tankPositions[5].x + centerX) / 2 - 50, // 본탱크와 6번 탱크 사이에 배치, 약간 왼쪽으로 조정
-    y: (tankPositions[5].y + centerY) / 2 - 30, // 위치 조정하여 직선 연결
+    y: (tankPositions[5].y + centerY) / 2, // 위치를 더 정확하게 조정
   }
 
   // 펌프 위치 계산 함수 수정 - 현재 탱크와 다음 탱크 사이에 위치하도록
@@ -379,11 +379,16 @@ export default function TankSystem({
     return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
   }
 
-  // 6번 탱크에서 3way 밸브로의 경로 (직선 연결) - 수직 연결로 변경
+  // 6번 탱크에서 3way 밸브로의 경로 (직선 연결)
   const calculate6ToValvePath = () => {
-    // 6번 탱크 하단 가장자리에서 시작하여 3way 밸브까지 수직 연결
-    const tankY = tankPositions[5].y + tankHeight / 2;
-    return `M ${tankPositions[5].x} ${tankY} V ${valve3wayPosition.y}`;
+    // 6번 탱크에서 수직으로 내려오다가 3way 밸브로 수평 연결
+    const startX = tankPositions[5].x;
+    const startY = tankPositions[5].y + tankHeight / 2;
+    const midY = (startY + valve3wayPosition.y) / 2;
+    
+    return `M ${startX} ${startY} 
+            V ${midY} 
+            L ${valve3wayPosition.x} ${valve3wayPosition.y}`;
   }
 
   // 3way 밸브에서 본탱크로의 경로 (직선 연결)
@@ -704,6 +709,74 @@ export default function TankSystem({
           )
         })()}
 
+        {/* 펌프 (3~6번) - 탱크 사이에 배치 */}
+        {Array(4)
+          .fill(0)
+          .map((_, index) => {
+            const currentTankIndex = index + 1 // 2, 3, 4, 5번 탱크부터 시작
+            const nextTankIndex = (currentTankIndex + 1) % 6 // 3, 4, 5, 6번 탱크
+            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
+            const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
+            const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
+            const stateMessage = pumpStateMessages[pumpNum] || '';
+            
+            return (
+              <g key={`pump-${pumpNum}`}>
+                {/* 인버터 펌프 */}
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius}
+                  className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                  fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                  onMouseDown={() => onPumpToggle && handlePumpMouseDown(pumpNum)}
+                  onMouseUp={() => onPumpToggle && handlePumpMouseUp(pumpNum)}
+                  onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
+                  onTouchStart={() => onPumpToggle && handlePumpTouchStart(pumpNum)}
+                  onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(pumpNum)}
+                  onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+                />
+                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                  IP_{pumpNum}
+                </text>
+                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                  {tank.pumpStatus}
+                </text>
+                
+                {/* 상태 메시지 표시 */}
+                {stateMessage && (
+                  <g>
+                    <rect
+                      x={pumpPos.x - 50}
+                      y={pumpPos.y + 25}
+                      width={100}
+                      height={20}
+                      rx="3"
+                      className="fill-gray-100 stroke-gray-300 stroke-1"
+                    />
+                    <text
+                      x={pumpPos.x}
+                      y={pumpPos.y + 38}
+                      textAnchor="middle"
+                      className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
+                    >
+                      {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
+                    </text>
+                  </g>
+                )}
+                
+                {currentPressedPump === pumpNum && (
+                  <circle
+                    cx={pumpPos.x}
+                    cy={pumpPos.y}
+                    r={pumpRadius + 5}
+                    className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                  />
+                )}
+              </g>
+            )
+          })}
+
         {/* 탱크 1-6 */}
         {tankPositions.map((pos, index) => {
           const tankNum = index + 1
@@ -714,9 +787,9 @@ export default function TankSystem({
             ? pos.y + tankHeight / 2 + 5
             : pos.y + tankHeight / 2 + 5;
           
-          // 4번 탱크인 경우 텍스트 박스 위치 조정
+          // 4번 탱크인 경우 텍스트 박스 위치를 더 많이 조정
           const adjustedTextBoxY = tankNum === 4
-            ? pos.y + tankHeight / 2 + 20
+            ? pos.y + tankHeight / 2 + 35 // 더 아래로 조정
             : textBoxY;
           
           // 1번 탱크 텍스트 박스 너비 조정
@@ -880,21 +953,20 @@ export default function TankSystem({
                 {tank.pumpStatus}
               </text>
               
-              {/* K 스위치 위치 변경 - 우측 상단 펌프 스위치 왼쪽 상단으로 이동 */}
+              {/* K 스위치 위치 조정 - 우측 상단에 고정 */}
               <g 
                 className="cursor-pointer"
                 onClick={() => onPumpKCommand && onPumpKCommand(1)}
-                transform="translate(710, 40)"
               >
                 <circle
-                  cx={0}
-                  cy={0}
-                  r={12}
+                  cx={550}
+                  cy={50}
+                  r={15}
                   className="fill-white stroke-blue-500 stroke-2"
                 />
                 <text
-                  x={0}
-                  y={4}
+                  x={550}
+                  y={54}
                   textAnchor="middle"
                   className="text-blue-600 font-bold text-sm"
                 >
