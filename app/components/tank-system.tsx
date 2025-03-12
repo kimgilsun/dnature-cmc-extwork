@@ -1101,9 +1101,6 @@ export default function TankSystem({
                 <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
                   IP_1
                 </text>
-                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
-                </text>
                 
                 {/* 펌프 스위치 표시 */}
                 <g className="transition-transform duration-300" style={{ transform: `translateY(${switchPosition * 20}px)` }}>
@@ -1131,8 +1128,6 @@ export default function TankSystem({
                     className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
                   />
                 )}
-                
-                {/* 리셋 버튼 제거 */}
                 
                 {/* K 스위치 - 1번 탱크 우측 상단으로 이동 */}
                 <g 
@@ -1210,9 +1205,6 @@ export default function TankSystem({
                 <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
                   IP_2
                 </text>
-                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
-                </text>
                 
                 {/* 펌프 스위치 표시 */}
                 <g className="transition-transform duration-300" style={{ transform: `translateY(${switchPosition * 20}px)` }}>
@@ -1240,8 +1232,6 @@ export default function TankSystem({
                     className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
                   />
                 )}
-                
-                {/* 리셋 버튼 제거 */}
                 
                 {/* 상태 메시지 표시 */}
                 {stateMessage && (
@@ -1303,9 +1293,6 @@ export default function TankSystem({
                   />
                   <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
                     IP_{pumpNum}
-                  </text>
-                  <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                    {tank.pumpStatus}
                   </text>
                   
                   {/* 펌프 스위치 표시 */}
