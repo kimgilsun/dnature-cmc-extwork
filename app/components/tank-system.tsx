@@ -1935,7 +1935,7 @@ export default function TankSystem({
               x="-60"
               y="-130"
               width="120"
-              height="160"
+              height="176"
               rx="10"
               className="fill-gray-50/70 stroke-gray-200 stroke-2"
             />
@@ -2050,7 +2050,7 @@ export default function TankSystem({
                 x="-60"
                 y="-130"
                 width="120"
-                height="160"
+                height="176"
                 rx="10"
                 className="fill-gray-50/70 stroke-gray-200 stroke-2"
               />
