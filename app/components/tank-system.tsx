@@ -5,6 +5,20 @@ import { MqttClient } from "mqtt"
 import { cn } from '@/lib/utils';
 import "./tank-system.css"; // 새로 생성한 CSS 파일 import
 
+// localStorage 래퍼 함수 추가 - 브라우저 환경에서만 동작
+const getLocalStorage = (key: string): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(key);
+  }
+  return null;
+};
+
+const setLocalStorage = (key: string, value: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(key, value);
+  }
+};
+
 interface Tank {
   id: number
   level: number
@@ -72,19 +86,17 @@ export default function TankSystem({
   
   // 컴포넌트 마운트 시 localStorage에서 저장된 밸브 상태를 복원하고 서버에 전송
   useEffect(() => {
-    // 브라우저 환경인지 확인
-    if (typeof window !== 'undefined') {
-      const savedValveState = localStorage.getItem('valveState');
-      // localStorage에 저장된 상태가 있고, 현재 상태와 다른 경우에만 서버에 전송
-      if (savedValveState && savedValveState !== tankData.valveState && onValveChange) {
-        console.log('localStorage에서 밸브 상태 복원 및 서버에 전송:', savedValveState);
-        // 상태 전송 시간 지연 (1초 후 실행)
-        const timer = setTimeout(() => {
-          onValveChange(savedValveState);
-        }, 1000);
-        
-        return () => clearTimeout(timer);
-      }
+    // 클라이언트 사이드에서만 실행되도록 래퍼 함수 사용
+    const savedValveState = getLocalStorage('valveState');
+    // localStorage에 저장된 상태가 있고, 현재 상태와 다른 경우에만 서버에 전송
+    if (savedValveState && savedValveState !== tankData.valveState && onValveChange) {
+      console.log('localStorage에서 밸브 상태 복원 및 서버에 전송:', savedValveState);
+      // 상태 전송 시간 지연 (1초 후 실행)
+      const timer = setTimeout(() => {
+        onValveChange(savedValveState);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
   }, [tankData.valveState, onValveChange]);
   
@@ -215,16 +227,11 @@ export default function TankSystem({
     console.log('현재 밸브 상태 문자열:', tankData.valveState);
     console.log('밸브 설명:', tankData.valveADesc, tankData.valveBDesc);
     
-    // 브라우저 환경인지 확인
-    const isClient = typeof window !== 'undefined';
-    
     // 특수 케이스: 0100 (밸브2 OFF, 밸브1 ON)
     if (tankData.valveState === '0100') {
       console.log('특수 케이스 감지: 0100 - 밸브2 OFF, 밸브1 ON');
-      // localStorage에 밸브 상태 저장 (브라우저 환경에서만)
-      if (isClient) {
-        localStorage.setItem('valveState', tankData.valveState);
-      }
+      // localStorage에 밸브 상태 저장 (래퍼 함수 사용)
+      setLocalStorage('valveState', tankData.valveState);
       return {
         valve1: 0, // 밸브2 OFF (3way)
         valve2: 1, // 밸브1 ON (2way)
@@ -246,10 +253,8 @@ export default function TankSystem({
       // 디버깅을 위한 로그
       console.log(`밸브 상태 파싱 결과: valveA=${valveAState} (${valveADesc}), valveB=${valveBState} (${valveBDesc})`);
       
-      // 밸브 상태를 로컬 스토리지에 저장 (브라우저 환경에서만)
-      if (isClient) {
-        localStorage.setItem('valveStatusMessage', tankData.valveStatusMessage);
-      }
+      // 밸브 상태를 로컬 스토리지에 저장 (래퍼 함수 사용)
+      setLocalStorage('valveStatusMessage', tankData.valveStatusMessage);
       
       return {
         valve1: valveAState,
@@ -261,34 +266,32 @@ export default function TankSystem({
     
     // 기존 로직 유지 (fallback)
     if (tankData.valveState.length !== 4) {
-      // localStorage에 저장된 상태가 있으면 사용 (브라우저 환경에서만)
-      if (isClient) {
-        const savedValveState = localStorage.getItem('valveState');
-        if (savedValveState && savedValveState.length === 4) {
-          console.log('localStorage에서 밸브 상태 복원:', savedValveState);
-          const v1 = parseInt(savedValveState[0]);
-          const v2 = parseInt(savedValveState[1]);
-          return {
-            valve1: v1,
-            valve2: v2,
-            valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
-            valve2Desc: v2 === 1 ? 'ON' : 'OFF'
-          };
-        }
-        
-        // localStorage에 저장된 밸브 상태 메시지가 있으면 사용
-        const savedValveStatusMessage = localStorage.getItem('valveStatusMessage');
-        if (savedValveStatusMessage) {
-          console.log('localStorage에서 밸브 상태 메시지 복원:', savedValveStatusMessage);
-          const valveAState = savedValveStatusMessage.includes('valveA=ON') ? 1 : 0;
-          const valveBState = savedValveStatusMessage.includes('valveB=ON') ? 1 : 0;
-          return {
-            valve1: valveAState,
-            valve2: valveBState,
-            valve1Desc: valveAState === 1 ? '추출순환' : '전체순환',
-            valve2Desc: valveBState === 1 ? 'ON' : 'OFF'
-          };
-        }
+      // localStorage에 저장된 상태가 있으면 사용 (래퍼 함수 사용)
+      const savedValveState = getLocalStorage('valveState');
+      if (savedValveState && savedValveState.length === 4) {
+        console.log('localStorage에서 밸브 상태 복원:', savedValveState);
+        const v1 = parseInt(savedValveState[0]);
+        const v2 = parseInt(savedValveState[1]);
+        return {
+          valve1: v1,
+          valve2: v2,
+          valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
+          valve2Desc: v2 === 1 ? 'ON' : 'OFF'
+        };
+      }
+      
+      // localStorage에 저장된 밸브 상태 메시지가 있으면 사용 (래퍼 함수 사용)
+      const savedValveStatusMessage = getLocalStorage('valveStatusMessage');
+      if (savedValveStatusMessage) {
+        console.log('localStorage에서 밸브 상태 메시지 복원:', savedValveStatusMessage);
+        const valveAState = savedValveStatusMessage.includes('valveA=ON') ? 1 : 0;
+        const valveBState = savedValveStatusMessage.includes('valveB=ON') ? 1 : 0;
+        return {
+          valve1: valveAState,
+          valve2: valveBState,
+          valve1Desc: valveAState === 1 ? '추출순환' : '전체순환',
+          valve2Desc: valveBState === 1 ? 'ON' : 'OFF'
+        };
       }
       
       return { valve1: 0, valve2: 0, valve1Desc: '', valve2Desc: '' };
@@ -297,10 +300,8 @@ export default function TankSystem({
     const v1 = parseInt(tankData.valveState[0]);
     const v2 = parseInt(tankData.valveState[1]);
 
-    // 현재 상태를 localStorage에 저장 (브라우저 환경에서만)
-    if (isClient) {
-      localStorage.setItem('valveState', tankData.valveState);
-    }
+    // 현재 상태를 localStorage에 저장 (래퍼 함수 사용)
+    setLocalStorage('valveState', tankData.valveState);
 
     return {
       valve1: v1,
@@ -373,11 +374,9 @@ export default function TankSystem({
     else if (tankData.valveState === "0000") nextState = "0100";
     else nextState = "0100"; // 기본값
     
-    // 변경된 상태를 localStorage에 저장 (브라우저 환경에서만)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('valveState', nextState);
-      console.log('다음 밸브 상태 localStorage에 저장:', nextState);
-    }
+    // 변경된 상태를 localStorage에 저장 (래퍼 함수 사용)
+    setLocalStorage('valveState', nextState);
+    console.log('다음 밸브 상태 localStorage에 저장:', nextState);
     
     return nextState;
   }
