@@ -2012,20 +2012,20 @@ export default function TankSystem({
 
           {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정하여 더 우측으로 이동 */}
           <g transform={`translate(${tankPositions[4].x - 250}, ${tankPositions[4].y})`}>
-            {/* 추출 제어 상자 */}
+            {/* 추출 제어 상자 - 가로 20%, 높이 40% 줄이기 */}
             <rect
-              x="-60"
-              y="-130"
-              width="120"
-              height="185"
-              rx="10"
+              x="-48"
+              y="-80"
+              width="96"
+              height="110"
+              rx="8"
               className="fill-gray-50/70 stroke-gray-200 stroke-2"
             />
             <text
               x="0"
-              y="-110"
+              y="-65"
               textAnchor="middle"
-              className="text-sm font-bold fill-gray-700"
+              className="text-xs font-bold fill-gray-700"
             >
               추출 제어
             </text>
@@ -2037,18 +2037,18 @@ export default function TankSystem({
               onClick={() => handleExtractionCommand("next")}
             >
               <rect
-                x="-45"
-                y="-95"
-                width="90"
-                height="30"
-                rx="5"
+                x="-40"
+                y="-55"
+                width="80"
+                height="20"
+                rx="4"
                 className="fill-blue-200 stroke-blue-400 stroke-1"
               />
               <text
                 x="0"
-                y="-77"
+                y="-42"
                 textAnchor="middle"
-                className="text-blue-700 font-bold text-sm"
+                className="text-blue-700 font-bold text-xs"
               >
                 Next
               </text>
@@ -2061,20 +2061,44 @@ export default function TankSystem({
               onClick={() => handleExtractionCommand("prev")}
             >
               <rect
-                x="-45"
-                y="-55"
-                width="90"
-                height="30"
-                rx="5"
+                x="-40"
+                y="-30"
+                width="80"
+                height="20"
+                rx="4"
                 className="fill-amber-200 stroke-amber-400 stroke-1"
               />
               <text
                 x="0"
-                y="-37"
+                y="-17"
                 textAnchor="middle"
-                className="text-amber-700 font-bold text-sm"
+                className="text-amber-700 font-bold text-xs"
               >
                 Prev
+              </text>
+            </g>
+            
+            {/* Pause 버튼 추가 */}
+            <g 
+              id="extraction-command-pause"
+              className="cursor-pointer hover:opacity-90 transition-all"
+              onClick={() => handleExtractionCommand("pause")}
+            >
+              <rect
+                x="-40"
+                y="-5"
+                width="80"
+                height="20"
+                rx="4"
+                className="fill-purple-200 stroke-purple-400 stroke-1"
+              />
+              <text
+                x="0"
+                y="8"
+                textAnchor="middle"
+                className="text-purple-700 font-bold text-xs"
+              >
+                Pause
               </text>
             </g>
             
@@ -2085,18 +2109,18 @@ export default function TankSystem({
               onClick={() => handleExtractionCommand("resume")}
             >
               <rect
-                x="-45"
-                y="-15"
-                width="90"
-                height="30"
-                rx="5"
+                x="-40"
+                y="20"
+                width="80"
+                height="20"
+                rx="4"
                 className="fill-green-200 stroke-green-400 stroke-1"
               />
               <text
                 x="0"
-                y="3"
+                y="33"
                 textAnchor="middle"
-                className="text-green-700 font-bold text-sm"
+                className="text-green-700 font-bold text-xs"
               >
                 Resume
               </text>
@@ -2109,18 +2133,18 @@ export default function TankSystem({
               onClick={() => handleExtractionCommand("sr")}
             >
               <rect
-                x="-45"
-                y="25"
-                width="90"
-                height="30"
-                rx="5"
+                x="-40"
+                y="45"
+                width="80"
+                height="20"
+                rx="4"
                 className="fill-red-200 stroke-red-400 stroke-1"
               />
               <text
                 x="0"
-                y="43"
+                y="58"
                 textAnchor="middle"
-                className="text-red-700 font-bold text-sm"
+                className="text-red-700 font-bold text-xs"
               >
                 Reset
               </text>
