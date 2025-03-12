@@ -1374,9 +1374,9 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
-      <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-        {/* 전체 컨텐츠를 조정 */}
-        <g transform="translate(0, -50) scale(0.75)">
+      <svg viewBox="0 0 1000 650" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        {/* 전체 컨텐츠를 조정 - 아래로 더 내려서 k 스위치까지 보이게 함 */}
+        <g transform="translate(0, -20) scale(0.75)">
           {/* 본탱크 - 너비 확대, 높이 감소 */}
           <rect
             x={mainTankPosition.x - mainTankPosition.width / 2}
@@ -1927,91 +1927,12 @@ export default function TankSystem({
             </text>
           </g>
 
-          {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정 */}
-          <g transform={`translate(${tankPositions[4].x - 150}, ${tankPositions[4].y - 80})`}>
-            {/* 펌프 리셋 버튼 상자 - 추출 제어 상자와 같은 높이로 조정 */}
-            <g transform="translate(90, -80)">
-              <rect
-                x="-60"
-                y="-80"
-                width="120"
-                height="160"
-                rx="10"
-                className="fill-gray-50/70 stroke-gray-200 stroke-2"
-              />
-              <text
-                x="0"
-                y="-60"
-                textAnchor="middle"
-                className="text-sm font-bold fill-gray-700"
-              >
-                펌프 리셋
-              </text>
-              
-              {/* 펌프 리셋 버튼들 - 우측으로 움직이는 스위치로 변경 */}
-              {Array(6).fill(0).map((_, i) => {
-                const pumpId = i + 1;
-                const resetState = resetDragState[pumpId] || { position: 0, dragging: false, timer: null };
-                
-                return (
-                  <g 
-                    key={`pump-reset-btn-${pumpId}`}
-                    id={`reset-btn-${pumpId}`}
-                    className="cursor-pointer"
-                    onMouseDown={(e) => handleResetDragStart(pumpId, e)}
-                    onTouchStart={(e) => handleResetDragStart(pumpId, e)}
-                  >
-                    {/* 리셋 스위치 배경 */}
-                    <rect
-                      x="-45"
-                      y={-45 + i * 25}
-                      width="70"
-                      height="18"
-                      rx="9"
-                      className="fill-gray-200 stroke-gray-300 stroke-1"
-                    />
-                    
-                    {/* 리셋 스위치 핸들 - 드래그에 따라 이동 */}
-                    <g className="transition-transform duration-100" 
-                       style={{ transform: `translateX(${resetState.position * 40}px)` }}>
-                      <rect
-                        x="-40"
-                        y={-44 + i * 25}
-                        width="30"
-                        height="16"
-                        rx="8"
-                        className={`${resetState.timer ? 'fill-red-500' : 'fill-black'} stroke-gray-700 stroke-1`}
-                      />
-                    </g>
-                    
-                    {/* 텍스트 */}
-                    <text
-                      x="-10"
-                      y={-33 + i * 25}
-                      textAnchor="middle"
-                      className="text-gray-700 font-bold text-[9px]"
-                    >
-                      펌프{pumpId}-리셋
-                    </text>
-                    
-                    {/* 타이머 진행 표시 */}
-                    {resetState.timer && (
-                      <circle
-                        cx="0"
-                        cy={-35 + i * 25}
-                        r="5"
-                        className="fill-red-500 animate-pulse"
-                      />
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-
+          {/* 5번 탱크 왼쪽에 추출 제어 버튼과 펌프 리셋 버튼 추가 - 위치 수정하여 나란히 배치 */}
+          <g transform={`translate(${tankPositions[4].x - 250}, ${tankPositions[4].y})`}>
             {/* 추출 제어 상자 */}
             <rect
               x="-60"
-              y="-80"
+              y="-130"
               width="120"
               height="160"
               rx="10"
@@ -2019,7 +1940,7 @@ export default function TankSystem({
             />
             <text
               x="0"
-              y="-60"
+              y="-110"
               textAnchor="middle"
               className="text-sm font-bold fill-gray-700"
             >
@@ -2034,7 +1955,7 @@ export default function TankSystem({
             >
               <rect
                 x="-45"
-                y="-45"
+                y="-95"
                 width="90"
                 height="30"
                 rx="5"
@@ -2042,7 +1963,7 @@ export default function TankSystem({
               />
               <text
                 x="0"
-                y="-27"
+                y="-77"
                 textAnchor="middle"
                 className="text-blue-700 font-bold text-sm"
               >
@@ -2058,7 +1979,7 @@ export default function TankSystem({
             >
               <rect
                 x="-45"
-                y="-5"
+                y="-55"
                 width="90"
                 height="30"
                 rx="5"
@@ -2066,7 +1987,7 @@ export default function TankSystem({
               />
               <text
                 x="0"
-                y="13"
+                y="-37"
                 textAnchor="middle"
                 className="text-amber-700 font-bold text-sm"
               >
@@ -2082,7 +2003,7 @@ export default function TankSystem({
             >
               <rect
                 x="-45"
-                y="35"
+                y="-15"
                 width="90"
                 height="30"
                 rx="5"
@@ -2090,7 +2011,7 @@ export default function TankSystem({
               />
               <text
                 x="0"
-                y="53"
+                y="3"
                 textAnchor="middle"
                 className="text-green-700 font-bold text-sm"
               >
@@ -2106,7 +2027,7 @@ export default function TankSystem({
             >
               <rect
                 x="-45"
-                y="75"
+                y="25"
                 width="90"
                 height="30"
                 rx="5"
@@ -2114,12 +2035,92 @@ export default function TankSystem({
               />
               <text
                 x="0"
-                y="93"
+                y="43"
                 textAnchor="middle"
                 className="text-red-700 font-bold text-sm"
               >
                 Reset
               </text>
+            </g>
+            
+            {/* 펌프 리셋 버튼 상자 - 추출 제어 상자 우측에 배치 */}
+            <g transform="translate(140, 0)">
+              <rect
+                x="-60"
+                y="-130"
+                width="120"
+                height="160"
+                rx="10"
+                className="fill-gray-50/70 stroke-gray-200 stroke-2"
+              />
+              <text
+                x="0"
+                y="-110"
+                textAnchor="middle"
+                className="text-sm font-bold fill-gray-700"
+              >
+                펌프 리셋
+              </text>
+              
+              {/* 펌프 리셋 버튼들 - 더 컴팩트하게 배치 */}
+              {Array(6).fill(0).map((_, i) => {
+                const pumpId = i + 1;
+                const resetState = resetDragState[pumpId] || { position: 0, dragging: false, timer: null };
+                const yPos = -95 + i * 25; // 버튼 간격 줄임
+                
+                return (
+                  <g 
+                    key={`pump-reset-btn-${pumpId}`}
+                    id={`reset-btn-${pumpId}`}
+                    className="cursor-pointer"
+                    onMouseDown={(e) => handleResetDragStart(pumpId, e)}
+                    onTouchStart={(e) => handleResetDragStart(pumpId, e)}
+                  >
+                    {/* 리셋 스위치 배경 */}
+                    <rect
+                      x="-45"
+                      y={yPos}
+                      width="70"
+                      height="18"
+                      rx="9"
+                      className="fill-gray-200 stroke-gray-300 stroke-1"
+                    />
+                    
+                    {/* 리셋 스위치 핸들 - 드래그에 따라 이동 */}
+                    <g className="transition-transform duration-100" 
+                       style={{ transform: `translateX(${resetState.position * 40}px)` }}>
+                      <rect
+                        x="-40"
+                        y={yPos + 1}
+                        width="30"
+                        height="16"
+                        rx="8"
+                        className={`${resetState.timer ? 'fill-red-500' : 'fill-black'} stroke-gray-700 stroke-1`}
+                      />
+                    </g>
+                    
+                    {/* 텍스트 */}
+                    <text
+                      x="-10"
+                      y={yPos + 12}
+                      textAnchor="middle"
+                      className="text-gray-700 font-bold text-[9px]"
+                    >
+                      펌프{pumpId}-리셋
+                    </text>
+                    
+                    {/* 타이머 진행 표시 */}
+                    {resetState.timer && (
+                      <circle
+                        cx="25"
+                        cy={yPos + 10}
+                        r="5"
+                        className="fill-red-500 animate-pulse"
+                      />
+                    )}
+                  </g>
+                );
+              })}
             </g>
           </g>
         </g> {/* 전체 컨텐츠 위로 이동 translate의 닫는 태그 */}
