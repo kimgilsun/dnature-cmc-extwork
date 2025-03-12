@@ -42,7 +42,7 @@ const getCamStateTopic = (camNumber: number): string => {
 
 // TankSystem 컴포넌트를 동적으로 임포트
 const TankSystem = dynamic(
-  () => import('@/app/components/tank-system'),
+  () => import('./tank-system'),
   { 
     ssr: false,
     loading: () => <div>탱크 시스템 로딩 중...</div>
