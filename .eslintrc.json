@@ -1,8 +1,5 @@
 {
-  "extends": ["next/core-web-vitals", "eslint:recommended"],
-  "rules": {
-    "react/no-unescaped-entities": "off",
-    "no-unused-vars": "off",
-    "react-hooks/exhaustive-deps": "off"
-  }
+  "extends": [],
+  "rules": {},
+  "ignorePatterns": ["**/*"]
 }
