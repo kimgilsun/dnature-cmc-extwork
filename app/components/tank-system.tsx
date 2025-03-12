@@ -938,6 +938,23 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
+      {/* 펌프 상태 버튼 추가 */}
+      <div className="flex justify-end space-x-2 mb-2 p-2">
+        {Array(6).fill(0).map((_, i) => {
+          const pumpId = i + 1;
+          const isOn = tankData.tanks[i]?.pumpStatus === "ON";
+          return (
+            <button 
+              key={`pump-btn-${pumpId}`}
+              className={`px-3 py-1 rounded text-xs font-bold ${isOn ? 'bg-black text-white' : 'bg-gray-100'}`}
+              onClick={() => onPumpToggle && onPumpToggle(pumpId)}
+            >
+              펌프 {pumpId}: {isOn ? 'ON' : 'OFF'}
+            </button>
+          );
+        })}
+      </div>
+      
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 */}
         <g transform="translate(0, -50) scale(0.75)">
@@ -1099,7 +1116,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(1, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  inverter_1
+                  invP-1
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1203,7 +1220,7 @@ export default function TankSystem({
                   onTouchStart={(e) => handlePumpSwitchStart(2, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  inverter_2
+                  invP-2
                 </text>
                 
                 {/* 펌프 스위치 표시 */}
@@ -1292,7 +1309,7 @@ export default function TankSystem({
                     onTouchStart={(e) => handlePumpSwitchStart(pumpNum, e)}
                   />
                   <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                    inverter_{pumpNum}
+                    invP-{pumpNum}
                   </text>
                   
                   {/* 펌프 스위치 표시 */}
