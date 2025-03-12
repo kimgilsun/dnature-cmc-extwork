@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from 'next/dynamic'
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import TankSystem from "@/app/components/tank-system"
 import MqttClient from "@/lib/mqtt-client"
 import {
   getPumpCommandTopic,
@@ -40,6 +40,15 @@ const getCamCommandTopic = (camNumber: number): string => {
 const getCamStateTopic = (camNumber: number): string => {
   return CAM_STATE_TOPIC.replace("%d", camNumber.toString());
 };
+
+// TankSystem 컴포넌트를 동적으로 임포트
+const TankSystem = dynamic(
+  () => import('@/app/components/tank-system'),
+  { 
+    ssr: false,
+    loading: () => <div>탱크 시스템 로딩 중...</div>
+  }
+)
 
 export default function Dashboard() {
   const [topic, setTopic] = useState(VALVE_INPUT_TOPIC)
