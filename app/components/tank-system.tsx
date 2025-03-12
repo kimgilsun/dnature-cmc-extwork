@@ -315,11 +315,11 @@ export default function TankSystem({
 
   // 경로 활성화 여부 확인
   const isPathActive = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
-    if (path === "tank6ToMain") return valve1 === 0
-    if (path === "tank6ToTank1") return valve1 === 1
-    if (path === "mainToTank1") return valve2 === 1
-    return false
-  }
+    if (path === "tank6ToMain") return valve1 === 0;
+    if (path === "tank6ToTank1") return valve1 === 1;
+    if (path === "mainToTank1") return valve2 === 1;
+    return false;
+  };
 
   // 밸브 상태에 따라 라인 표시 여부 결정하는 함수 추가
   const shouldShowLine = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
@@ -327,39 +327,39 @@ export default function TankSystem({
     if (path === "tank6ToTank1") return valve1 === 1; // 추출 순환일 때 1번 펌프로의 라인 표시
     if (path === "mainToTank1") return valve2 === 1; // 2way 밸브가 열려있을 때 표시
     return false;
-  }
+  };
 
   // 밸브 상태에 따른 파이프 색상 가져오기
   const getValvePipeColor = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
-    return isPathActive(path) ? "stroke-blue-500" : "stroke-gray-300"
-  }
+    return isPathActive(path) ? "stroke-blue-500" : "stroke-gray-300";
+  };
 
   // 펌프 상태에 따른 파이프 색상 가져오기
   const getPipeColor = (fromTank: number, toTank: number) => {
     // 1-based 인덱스를 0-based로 변환
-    const fromIndex = fromTank - 1
-    const toIndex = toTank - 1
+    const fromIndex = fromTank - 1;
+    const toIndex = toTank - 1;
 
     // 해당 구간에 연결된 펌프의 상태 확인
     // 예: 2-3 구간은 3번 펌프에 연결 (인덱스 2)
-    const pumpIndex = toIndex >= 0 && toIndex < tankData.tanks.length ? toIndex : fromIndex
-    const pumpStatus = tankData.tanks[pumpIndex]?.pumpStatus || "OFF"
+    const pumpIndex = toIndex >= 0 && toIndex < tankData.tanks.length ? toIndex : fromIndex;
+    const pumpStatus = tankData.tanks[pumpIndex]?.pumpStatus || "OFF";
 
-    return pumpStatus === "ON" ? "stroke-blue-500" : "stroke-gray-300"
-  }
+    return pumpStatus === "ON" ? "stroke-blue-500" : "stroke-gray-300";
+  };
 
   // 밸브 상태에 따른 텍스트 반환
   const getValveStateText = () => {
-    const { valve1, valve2 } = parseValveState()
+    const { valve1, valve2 } = parseValveState();
     
     if (valve1 === 1) {
-      return "추출 순환"
+      return "추출 순환";
     } else if (valve2 === 1) {
-      return "전체 순환 (열림)"
+      return "전체 순환 (열림)";
     } else {
-      return "밸브 닫힘"
+      return "밸브 닫힘";
     }
-  }
+  };
 
   // 다음 밸브 상태 가져오기 (순환)
   const getNextValveState = () => {
@@ -379,78 +379,78 @@ export default function TankSystem({
     console.log('다음 밸브 상태 localStorage에 저장:', nextState);
     
     return nextState;
-  }
+  };
 
   // 원형 레이아웃을 위한 계산
-  const centerX = 500
-  const centerY = 350 // 본탱크 위치를 위로 조정
-  const mainTankRadius = 70
-  const circleRadius = 250
-  const tankWidth = 100
-  const tankHeight = 100
-  const pumpRadius = 30
-  const pumpDistance = 60
+  const centerX = 500;
+  const centerY = 350; // 본탱크 위치를 위로 조정
+  const mainTankRadius = 70;
+  const circleRadius = 250;
+  const tankWidth = 100;
+  const tankHeight = 100;
+  const pumpRadius = 30;
+  const pumpDistance = 60;
 
   // 원형으로 배치된 탱크 위치 계산
   const calculatePosition = (index: number, total: number) => {
     // 시작 각도를 조정하여 1번 탱크가 상단에 오도록 함
-    const startAngle = -Math.PI / 2
-    const angle = startAngle + (index * 2 * Math.PI) / total
+    const startAngle = -Math.PI / 2;
+    const angle = startAngle + (index * 2 * Math.PI) / total;
     return {
       x: centerX + circleRadius * Math.cos(angle),
       y: centerY + circleRadius * Math.sin(angle),
       angle: angle,
-    }
-  }
+    };
+  };
 
   // 탱크 위치 계산
   const tankPositions = Array(6)
     .fill(0)
     .map((_, i) => {
-      const pos = calculatePosition(i, 6)
+      const pos = calculatePosition(i, 6);
       return {
         ...pos,
         label: `${i + 1}번 탱크`,
-      }
-    })
+      };
+    });
 
   // 본탱크 위치 - 사각형으로 변경하고 크기 확대
-  const mainTankPosition = { x: centerX, y: centerY, label: "본탱크", width: 180, height: 180 }
+  const mainTankPosition = { x: centerX, y: centerY, label: "본탱크", width: 180, height: 180 };
 
   // 밸브 위치 계산 수정
   // 2way 밸브(밸브1) 위치 계산 수정 - 본탱크에서 더 멀어지게, 1번 탱크 텍스트박스가 보이도록 아래로
   const valve2Position = {
     x: centerX,
     y: centerY - 100, // 본탱크 위쪽에 배치하되 더 아래로 조정 (기존 -150에서 -100으로)
-  }
+  };
 
   // 3way 밸브(밸브2) 위치 계산 - 6번 탱크 바로 우측에 배치하고 약간 아래로 내림
   const valve3wayPosition = {
     x: tankPositions[5].x + tankWidth / 2 + 50, // 6번 탱크 바로 우측으로 이동
     y: tankPositions[5].y + 20, // 6번 탱크와 동일한 높이에서 약간 아래로 조정
-  }
+  };
 
   // 펌프 위치 계산 함수 수정 - 현재 탱크와 다음 탱크 사이에 위치하도록
   const calculatePumpPosition = (currentTankIndex: number, nextTankIndex: number) => {
-    const currentTank = tankPositions[currentTankIndex]
-    const nextTank = tankPositions[nextTankIndex]
+    const currentTank = tankPositions[currentTankIndex];
+    const nextTank = tankPositions[nextTankIndex];
 
     // 두 탱크 간의 중간 지점에 펌프 배치
     return {
       x: (currentTank.x + nextTank.x) / 2,
       y: (currentTank.y + nextTank.y) / 2,
       angle: currentTank.angle
-    }
-  }
+    };
+  };
 
   // 탱크 간 파이프 경로 계산
   const calculatePipePath = (fromIndex: number, toIndex: number) => {
-    const from = tankPositions[fromIndex]
-    const to = tankPositions[toIndex]
+    const from = tankPositions[fromIndex];
+    const to = tankPositions[toIndex];
 
     // 직선 경로
-    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
-  }
+    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  };
 
   // 6번 탱크에서 3way 밸브(밸브2)로의 경로 - 우측으로 짧게 연결
   const calculate6ToValvePath = () => {
@@ -460,7 +460,7 @@ export default function TankSystem({
     
     // 6번 탱크와 밸브2가 같은 높이에 있으므로 직선으로 연결
     return `M ${startX} ${startY} H ${valve3wayPosition.x - 30}`;
-  }
+  };
 
   // 3way 밸브(밸브2)에서 본탱크로의 경로 - 전체순환일 때만 표시
   const calculate3wayToMainPath = () => {
@@ -472,7 +472,7 @@ export default function TankSystem({
     return `M ${valve3wayPosition.x} ${valve3wayPosition.y} 
             H ${(valve3wayPosition.x + tankLeft) / 2}
             L ${tankLeft + 20} ${tankMid}`;
-  }
+  };
 
   // 본탱크에서 2way 밸브(밸브1)로의 경로 - 항상 표시
   const calculateMainToTank1Path = () => {
@@ -481,7 +481,7 @@ export default function TankSystem({
     // 본탱크 상단에서 밸브1까지의 거리의 30%만 연결하여 눈에 보이게 함
     const lineLength = Math.abs(valve2Position.y - tankEdgeY) * 0.3;
     return `M ${mainTankPosition.x} ${tankEdgeY} V ${tankEdgeY - lineLength}`;
-  }
+  };
 
   // 2way 밸브(밸브1)에서 펌프1 입구 쪽으로의 경로 - 항상 표시
   const calculate2wayToPump1Path = () => {
@@ -491,7 +491,7 @@ export default function TankSystem({
     return `M ${valve2Position.x} ${valve2Position.y} 
             V ${(valve2Position.y + pump1Pos.y) / 2}
             L ${pump1Pos.x} ${pump1Pos.y}`;
-  }
+  };
 
   // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 추출순환일 때만 표시
   const calculate3wayToPump1Path = () => {
@@ -509,32 +509,31 @@ export default function TankSystem({
     const endY = valve3wayPosition.y + dy * 0.85;
     
     return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${endX} ${endY}`;
-  }
+  };
 
-  // 합류 지점에서 펌프1로의 경로 - 이제 합류 지점이 없으므로 필요 없음
-  // 하지만 기존 로직이 이 함수를 사용하므로 그대로 유지
+  // 합류 지점에서 펌프1로의 경로
   const calculateMergeToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     return `M ${pump1Pos.x} ${pump1Pos.y} L ${pump1Pos.x} ${pump1Pos.y}`; // 변경 없는 경로
-  }
+  };
 
   // 1번 펌프에서 1번 탱크로의 경로 (직선 연결)
   const calculatePump1To1Path = () => {
-    const pump1Pos = calculatePumpPosition(5, 0)
-    return `M ${pump1Pos.x} ${pump1Pos.y} L ${tankPositions[0].x} ${tankPositions[0].y}`
-  }
+    const pump1Pos = calculatePumpPosition(5, 0);
+    return `M ${pump1Pos.x} ${pump1Pos.y} L ${tankPositions[0].x} ${tankPositions[0].y}`;
+  };
 
   // 1번 탱크에서 2번 펌프로의 경로
   const calculate1ToPump2Path = () => {
-    const pump2Pos = calculatePumpPosition(0, 1)
-    return `M ${tankPositions[0].x} ${tankPositions[0].y} L ${pump2Pos.x} ${pump2Pos.y}`
-  }
+    const pump2Pos = calculatePumpPosition(0, 1);
+    return `M ${tankPositions[0].x} ${tankPositions[0].y} L ${pump2Pos.x} ${pump2Pos.y}`;
+  };
 
   // 2번 펌프에서 2번 탱크로의 경로
   const calculatePump2To2Path = () => {
-    const pump2Pos = calculatePumpPosition(0, 1)
-    return `M ${pump2Pos.x} ${pump2Pos.y} L ${tankPositions[1].x} ${tankPositions[1].y}`
-  }
+    const pump2Pos = calculatePumpPosition(0, 1);
+    return `M ${pump2Pos.x} ${pump2Pos.y} L ${tankPositions[1].x} ${tankPositions[1].y}`;
+  };
 
   // 밸브 상태 메시지에서 필요한 부분만 추출
   const extractValveStatus = (message: string) => {
@@ -556,7 +555,7 @@ export default function TankSystem({
     }
     
     return "";
-  }
+  };
 
   // 화살표 위치 계산
   const calculateArrowPosition = (path: string, progress = 0.5) => {
@@ -726,8 +725,8 @@ export default function TankSystem({
 
         {/* 1번 탱크에서 2번 펌프로의 경로 */}
         {(() => {
-          const pumpPos = calculatePumpPosition(0, 1)
-          const tank = tankData.tanks[1] // 2번 펌프 = 1번 인덱스
+          const pumpPos = calculatePumpPosition(0, 1);
+          const tank = tankData.tanks[1]; // 2번 펌프 = 1번 인덱스
           const stateMessage = pumpStateMessages[2] || '';
           
           return (
@@ -783,7 +782,7 @@ export default function TankSystem({
                 />
               )}
             </g>
-          )
+          );
         })()}
 
         {/* 펌프 (3~6번) - 탱크 사이에 배치 */}
@@ -792,9 +791,9 @@ export default function TankSystem({
           .map((_, index) => {
             const currentTankIndex = index + 1 // 2, 3, 4, 5번 탱크부터 시작
             const nextTankIndex = (currentTankIndex + 1) % 6 // 3, 4, 5, 6번 탱크
-            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
+            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex);
             const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
-            const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
+            const tank = tankData.tanks[pumpNum - 1]; // 인덱스는 0부터 시작하므로 -1
             const stateMessage = pumpStateMessages[pumpNum] || '';
             
             return (
@@ -851,13 +850,13 @@ export default function TankSystem({
                   />
                 )}
               </g>
-            )
+            );
           })}
 
         {/* 탱크 1-6 */}
         {tankPositions.map((pos, index) => {
-          const tankNum = index + 1
-          const tank = tankData.tanks[index]
+          const tankNum = index + 1;
+          const tank = tankData.tanks[index];
           
           // 모든 탱크 텍스트 박스 위치 조정
           const textBoxY = pos.y + tankHeight / 2 + 5;
@@ -912,7 +911,7 @@ export default function TankSystem({
                 </text>
               </g>
             </g>
-          )
+          );
         })}
 
         {/* 3way 밸브 - ON/OFF 스위치 형태로 개선 - 크기 줄임 */}
@@ -991,8 +990,8 @@ export default function TankSystem({
 
         {/* 1번 펌프 (6번과 1번 탱크 사이) */}
         {(() => {
-          const pumpPos = calculatePumpPosition(5, 0)
-          const tank = tankData.tanks[0] // 1번 펌프 = 0번 인덱스
+          const pumpPos = calculatePumpPosition(5, 0);
+          const tank = tankData.tanks[0]; // 1번 펌프 = 0번 인덱스
           const stateMessage = pumpStateMessages[1] || '';
           
           return (
@@ -1014,8 +1013,8 @@ export default function TankSystem({
                 IP_1
               </text>
               <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
-                </text>
+                {tank.pumpStatus}
+              </text>
               
               {/* K 스위치 위치 조정 - 우측 상단에 고정 (소문자 k 발행) */}
               <g 
@@ -1069,7 +1068,7 @@ export default function TankSystem({
                 />
               )}
             </g>
-          )
+          );
         })()}
       </svg>
 
@@ -1222,5 +1221,5 @@ export default function TankSystem({
         </div>
       </div>
     </div>
-  )
+  );
 }
