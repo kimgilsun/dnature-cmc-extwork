@@ -400,11 +400,12 @@ export default function TankSystem({
             L ${tankLeft + 20} ${tankMid}`;
   }
 
-  // 본탱크에서 2way 밸브(밸브1)로의 경로 (직각으로 조정) - 더 짧게 수정
+  // 본탱크에서 2way 밸브(밸브1)로의 경로 (직각으로 조정) - 더 짧게 수정하되 보이도록
   const calculateMainToTank1Path = () => {
-    // 본탱크 위쪽 가장자리에서 시작하여 2way 밸브까지 수직 연결 - 더 짧게
+    // 본탱크 위쪽 가장자리에서 시작하여 2way 밸브까지 수직 연결 - 짧게 하되 보이도록
     const tankEdgeY = mainTankPosition.y - mainTankPosition.height / 2;
-    const lineLength = Math.abs(valve2Position.y - tankEdgeY) / 2; // 라인 길이를 반으로 줄임
+    // 본탱크 상단에서 밸브1까지의 거리의 30%만 연결하여 눈에 보이게 함
+    const lineLength = Math.abs(valve2Position.y - tankEdgeY) * 0.3;
     return `M ${mainTankPosition.x} ${tankEdgeY} V ${tankEdgeY - lineLength}`;
   }
 
@@ -418,13 +419,22 @@ export default function TankSystem({
             L ${pump1Pos.x} ${pump1Pos.y}`;
   }
 
-  // 3way 밸브(밸브2)에서 펌프 1로의 경로
+  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 직접 짧게 연결
   const calculate3wayToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     
-    // 밸브2에서 펌프1으로 직접 연결되는 경로로 수정
-    return `M ${valve3wayPosition.x} ${valve3wayPosition.y} 
-            L ${pump1Pos.x} ${pump1Pos.y}`;
+    // 시작점과 끝점 사이 벡터 계산
+    const dx = pump1Pos.x - valve3wayPosition.x;
+    const dy = pump1Pos.y - valve3wayPosition.y;
+    
+    // 벡터 길이
+    const length = Math.sqrt(dx*dx + dy*dy);
+    
+    // 밸브2에서 펌프1 방향으로 20% 정도만 이동한 지점으로 연결
+    const endX = valve3wayPosition.x + dx * 0.2;
+    const endY = valve3wayPosition.y + dy * 0.2;
+    
+    return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${endX} ${endY}`;
   }
 
   // 합류 지점에서 펌프1로의 경로 - 이제 합류 지점이 없으므로 필요 없음
