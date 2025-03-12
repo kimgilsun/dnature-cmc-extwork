@@ -70,6 +70,21 @@ export default function TankSystem({
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [currentPressedPump, setCurrentPressedPump] = useState<number | null>(null);
   
+  // 컴포넌트 마운트 시 localStorage에서 저장된 밸브 상태를 복원하고 서버에 전송
+  useEffect(() => {
+    const savedValveState = localStorage.getItem('valveState');
+    // localStorage에 저장된 상태가 있고, 현재 상태와 다른 경우에만 서버에 전송
+    if (savedValveState && savedValveState !== tankData.valveState && onValveChange) {
+      console.log('localStorage에서 밸브 상태 복원 및 서버에 전송:', savedValveState);
+      // 상태 전송 시간 지연 (1초 후 실행)
+      const timer = setTimeout(() => {
+        onValveChange(savedValveState);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [tankData.valveState, onValveChange]);
+  
   // 펌프 버튼 마우스 다운 핸들러
   const handlePumpMouseDown = (pumpId: number) => {
     setCurrentPressedPump(pumpId);
@@ -200,6 +215,8 @@ export default function TankSystem({
     // 특수 케이스: 0100 (밸브2 OFF, 밸브1 ON)
     if (tankData.valveState === '0100') {
       console.log('특수 케이스 감지: 0100 - 밸브2 OFF, 밸브1 ON');
+      // localStorage에 밸브 상태 저장
+      localStorage.setItem('valveState', tankData.valveState);
       return {
         valve1: 0, // 밸브2 OFF (3way)
         valve2: 1, // 밸브1 ON (2way)
@@ -221,6 +238,9 @@ export default function TankSystem({
       // 디버깅을 위한 로그
       console.log(`밸브 상태 파싱 결과: valveA=${valveAState} (${valveADesc}), valveB=${valveBState} (${valveBDesc})`);
       
+      // 밸브 상태를 로컬 스토리지에 저장 (연결이 끊어졌다가 다시 연결될 때 사용)
+      localStorage.setItem('valveStatusMessage', tankData.valveStatusMessage);
+      
       return {
         valve1: valveAState,
         valve2: valveBState,
@@ -231,11 +251,42 @@ export default function TankSystem({
     
     // 기존 로직 유지 (fallback)
     if (tankData.valveState.length !== 4) {
+      // localStorage에 저장된 상태가 있으면 사용
+      const savedValveState = localStorage.getItem('valveState');
+      if (savedValveState && savedValveState.length === 4) {
+        console.log('localStorage에서 밸브 상태 복원:', savedValveState);
+        const v1 = parseInt(savedValveState[0]);
+        const v2 = parseInt(savedValveState[1]);
+        return {
+          valve1: v1,
+          valve2: v2,
+          valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
+          valve2Desc: v2 === 1 ? 'ON' : 'OFF'
+        };
+      }
+      
+      // localStorage에 저장된 밸브 상태 메시지가 있으면 사용
+      const savedValveStatusMessage = localStorage.getItem('valveStatusMessage');
+      if (savedValveStatusMessage) {
+        console.log('localStorage에서 밸브 상태 메시지 복원:', savedValveStatusMessage);
+        const valveAState = savedValveStatusMessage.includes('valveA=ON') ? 1 : 0;
+        const valveBState = savedValveStatusMessage.includes('valveB=ON') ? 1 : 0;
+        return {
+          valve1: valveAState,
+          valve2: valveBState,
+          valve1Desc: valveAState === 1 ? '추출순환' : '전체순환',
+          valve2Desc: valveBState === 1 ? 'ON' : 'OFF'
+        };
+      }
+      
       return { valve1: 0, valve2: 0, valve1Desc: '', valve2Desc: '' };
     }
 
     const v1 = parseInt(tankData.valveState[0]);
     const v2 = parseInt(tankData.valveState[1]);
+
+    // 현재 상태를 localStorage에 저장
+    localStorage.setItem('valveState', tankData.valveState);
 
     return {
       valve1: v1,
@@ -298,13 +349,21 @@ export default function TankSystem({
   // 다음 밸브 상태 가져오기 (순환)
   const getNextValveState = () => {
     console.log('현재 밸브 상태:', tankData.valveState);
+    let nextState = '';
+    
     // 0100 상태에서 클릭하면 1000 상태로 변경
-    if (tankData.valveState === "0100") return "1000"
+    if (tankData.valveState === "0100") nextState = "1000";
     // 1000 상태에서 클릭하면 0000 상태로 변경
-    if (tankData.valveState === "1000") return "0000"
+    else if (tankData.valveState === "1000") nextState = "0000";
     // 0000 상태에서 클릭하면 0100 상태로 변경
-    if (tankData.valveState === "0000") return "0100"
-    return "0100" // 기본값
+    else if (tankData.valveState === "0000") nextState = "0100";
+    else nextState = "0100"; // 기본값
+    
+    // 변경된 상태를 localStorage에 저장 (연결이 끊어졌다가 다시 연결될 때 복원하기 위해)
+    localStorage.setItem('valveState', nextState);
+    console.log('다음 밸브 상태 localStorage에 저장:', nextState);
+    
+    return nextState;
   }
 
   // 원형 레이아웃을 위한 계산
