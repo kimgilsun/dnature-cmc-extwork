@@ -430,9 +430,9 @@ export default function TankSystem({
     // 벡터 길이
     const length = Math.sqrt(dx*dx + dy*dy);
     
-    // 밸브2에서 펌프1 방향으로 35% 정도 이동한 지점으로 연결 (기존 20%에서 증가)
-    const endX = valve3wayPosition.x + dx * 0.35;
-    const endY = valve3wayPosition.y + dy * 0.35;
+    // 밸브2에서 펌프1 방향으로 50% 정도 이동한 지점으로 연결 (기존 35%에서 증가)
+    const endX = valve3wayPosition.x + dx * 0.5;
+    const endY = valve3wayPosition.y + dy * 0.5;
     
     return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${endX} ${endY}`;
   }
