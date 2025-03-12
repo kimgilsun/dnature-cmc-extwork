@@ -11,29 +11,149 @@ const generateClientId = () => {
   return `client_${Math.random().toString(36).substring(2, 15)}`;
 };
 
-// 시스템 상태 저장 및 불러오기 함수
+// 시스템 상태 저장 및 불러오기 함수 개선
 const saveSystemState = (state: any) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('tankSystemState', JSON.stringify({
-      ...state,
-      timestamp: Date.now(),
-      version: '1.0'
-    }));
+    // 로컬 스토리지에 저장
+    try {
+      localStorage.setItem('tankSystemState', JSON.stringify({
+        ...state,
+        timestamp: Date.now(),
+        version: '1.0'
+      }));
+      
+      // 서버 API를 통해 상태 저장 (나중에 실제 API로 대체)
+      if (window.navigator.onLine) {
+        const stateToSave = {
+          ...state,
+          timestamp: Date.now(),
+          version: '1.0'
+        };
+        
+        // 상태가 변경될 때마다 세션 스토리지에도 백업 저장
+        sessionStorage.setItem('tankSystemState', JSON.stringify(stateToSave));
+        
+        // IndexedDB에도 저장 (오프라인 지원)
+        saveToIndexedDB(stateToSave);
+        
+        // 다른 탭/창에 상태 변경 알림
+        localStorage.setItem('tankSystemStateUpdate', Date.now().toString());
+      }
+    } catch (error) {
+      console.error('상태 저장 실패:', error);
+    }
   }
 };
 
-const loadSystemState = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      const savedState = localStorage.getItem('tankSystemState');
-      if (savedState) {
-        return JSON.parse(savedState);
+// IndexedDB에 상태 저장
+const saveToIndexedDB = (state: any) => {
+  if (typeof window === 'undefined' || !window.indexedDB) return;
+  
+  try {
+    const request = window.indexedDB.open('TankSystemDB', 1);
+    
+    request.onupgradeneeded = function(event) {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('systemState')) {
+        db.createObjectStore('systemState', { keyPath: 'id' });
       }
-    } catch (error) {
-      console.error('상태 불러오기 실패:', error);
-    }
+    };
+    
+    request.onsuccess = function(event) {
+      const db = request.result;
+      const transaction = db.transaction(['systemState'], 'readwrite');
+      const store = transaction.objectStore('systemState');
+      
+      // 항상 같은 키로 저장하여 최신 상태만 유지
+      store.put({
+        id: 'currentState',
+        data: state,
+        timestamp: Date.now()
+      });
+    };
+    
+    request.onerror = function(event) {
+      console.error('IndexedDB 저장 오류:', event);
+    };
+  } catch (error) {
+    console.error('IndexedDB 접근 오류:', error);
   }
-  return null;
+};
+
+// 상태 불러오기 함수 개선
+const loadSystemState = () => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    // 우선 로컬 스토리지에서 시도
+    const savedStateStr = localStorage.getItem('tankSystemState');
+    let savedState = savedStateStr ? JSON.parse(savedStateStr) : null;
+    
+    // 세션 스토리지에서도 확인 (더 최신일 수 있음)
+    const sessionStateStr = sessionStorage.getItem('tankSystemState');
+    const sessionState = sessionStateStr ? JSON.parse(sessionStateStr) : null;
+    
+    // 타임스탬프 비교하여 더 최신 상태 사용
+    if (sessionState && sessionState.timestamp > (savedState?.timestamp || 0)) {
+      savedState = sessionState;
+    }
+    
+    // IndexedDB에서도 확인 (비동기 로드는 별도 함수로)
+    loadFromIndexedDB().then(indexedDBState => {
+      // 컴포넌트에서 별도로 처리
+    });
+    
+    return savedState;
+  } catch (error) {
+    console.error('상태 불러오기 실패:', error);
+    return null;
+  }
+};
+
+// IndexedDB에서 상태 불러오기 (Promise 반환)
+const loadFromIndexedDB = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject('IndexedDB 사용 불가');
+      return;
+    }
+    
+    try {
+      const request = window.indexedDB.open('TankSystemDB', 1);
+      
+      request.onupgradeneeded = function(event) {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('systemState')) {
+          db.createObjectStore('systemState', { keyPath: 'id' });
+        }
+      };
+      
+      request.onsuccess = function(event) {
+        const db = request.result;
+        const transaction = db.transaction(['systemState'], 'readonly');
+        const store = transaction.objectStore('systemState');
+        const getRequest = store.get('currentState');
+        
+        getRequest.onsuccess = function() {
+          if (getRequest.result) {
+            resolve(getRequest.result.data);
+          } else {
+            resolve(null);
+          }
+        };
+        
+        getRequest.onerror = function(event) {
+          reject('IndexedDB 읽기 오류');
+        };
+      };
+      
+      request.onerror = function(event) {
+        reject('IndexedDB 접근 오류');
+      };
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
 
 interface Tank {
@@ -189,7 +309,7 @@ export default function TankSystem({
     };
   }, [mqttClient]);
   
-  // MQTT 메시지 수신 처리
+  // MQTT 메시지 수신 처리 개선
   useEffect(() => {
     if (!mqttClient) return;
     
@@ -220,10 +340,50 @@ export default function TankSystem({
               );
             }, 5000);
           }
+        } else if (topic === 'tank-system/state') {
+          // 전체 시스템 상태 업데이트
+          try {
+            const stateUpdate = JSON.parse(messageStr);
+            
+            // 상태 업데이트 시간 기록
+            setLastStateUpdate(new Date());
+            
+            // 웹 스토리지에 상태 저장
+            saveSystemState(stateUpdate);
+            
+            // 상태 변경 알림 (다른 컴포넌트나 탭에 알림)
+            if (mqttClient) {
+              mqttClient.publish('tank-system/state-updated', JSON.stringify({
+                timestamp: Date.now(),
+                clientId: clientId.current,
+              }));
+            }
+          } catch (error) {
+            console.error('상태 업데이트 처리 오류:', error);
+          }
+        } else if (topic === 'tank-system/valve-state') {
+          // 밸브 상태 업데이트
+          try {
+            const valveStateUpdate = JSON.parse(messageStr);
+            
+            // 현재 상태에 밸브 상태 병합
+            const updatedState = {
+              ...tankData,
+              valveState: valveStateUpdate.valveState || tankData.valveState,
+              valveStatusMessage: valveStateUpdate.valveStatusMessage || tankData.valveStatusMessage,
+              valveADesc: valveStateUpdate.valveADesc || tankData.valveADesc,
+              valveBDesc: valveStateUpdate.valveBDesc || tankData.valveBDesc
+            };
+            
+            // 웹 스토리지에 업데이트된 상태 저장
+            saveSystemState(updatedState);
+            
+            // 상태 업데이트 시간 기록
+            setLastStateUpdate(new Date());
+          } catch (error) {
+            console.error('밸브 상태 업데이트 처리 오류:', error);
+          }
         }
-        
-        // 상태 업데이트 시간 기록
-        setLastStateUpdate(new Date());
         
         // 상태 변경 시 로컬에 저장
         if (tankData) {
@@ -236,10 +396,78 @@ export default function TankSystem({
     
     mqttClient.on('message', handleMessage);
     
+    // 연결 시 최신 상태 요청
+    if (mqttClient.connected) {
+      mqttClient.publish('tank-system/request', JSON.stringify({
+        clientId: clientId.current,
+        timestamp: Date.now(),
+        requestType: 'full-state'
+      }));
+    }
+    
+    // 다른 탭/창에서의 상태 변경 감지
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'tankSystemStateUpdate') {
+        // 다른 탭에서 상태가 업데이트됨 - 최신 상태 로드
+        const savedState = loadSystemState();
+        if (savedState && savedState.timestamp) {
+          // UI 업데이트 로직
+          setLastStateUpdate(new Date(savedState.timestamp));
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
     return () => {
       mqttClient.off('message', handleMessage);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [mqttClient, tankData]);
+  
+  // 컴포넌트 마운트 시 저장된 상태 복원 - IndexedDB 추가
+  useEffect(() => {
+    // 로컬/세션 스토리지에서 먼저 불러오기
+    const savedState = loadSystemState();
+    if (savedState && savedState.timestamp) {
+      setLastStateUpdate(new Date(savedState.timestamp));
+    }
+    
+    // IndexedDB에서도 확인 (더 최신일 수 있음)
+    loadFromIndexedDB()
+      .then(indexedDBState => {
+        if (indexedDBState && 
+            indexedDBState.timestamp > (savedState?.timestamp || 0)) {
+          // IndexedDB의 상태가 더 최신이면 사용
+          setLastStateUpdate(new Date(indexedDBState.timestamp));
+          
+          // localStorage와 sessionStorage 업데이트
+          localStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
+          sessionStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
+        }
+      })
+      .catch(error => {
+        console.error('IndexedDB 상태 로드 실패:', error);
+      });
+    
+    // 온라인 상태 변화 감지
+    const handleOnlineStatusChange = () => {
+      if (window.navigator.onLine && mqttClient) {
+        // 온라인으로 복귀 시 최신 상태 요청
+        mqttClient.publish('tank-system/request', JSON.stringify({
+          clientId: clientId.current,
+          timestamp: Date.now(),
+          requestType: 'full-state'
+        }));
+      }
+    };
+    
+    window.addEventListener('online', handleOnlineStatusChange);
+    
+    return () => {
+      window.removeEventListener('online', handleOnlineStatusChange);
+    };
+  }, [mqttClient]);
   
   // 리셋 드래그 시작
   const handleResetDragStart = (pumpId: number, e: React.MouseEvent | React.TouchEvent) => {
@@ -564,12 +792,31 @@ export default function TankSystem({
     return {};
   }
 
-  // 밸브 상태 파싱 (4자리 문자열에서 첫 두 자리만 사용)
+  // 밸브 상태 파싱 (4자리 문자열에서 첫 두 자리만 사용) - 개선
   const parseValveState = () => {
     // 디버깅용 로그
     console.log('밸브 상태 파싱 시작 - 밸브 상태 메시지:', tankData.valveStatusMessage);
     console.log('현재 밸브 상태 문자열:', tankData.valveState);
     console.log('밸브 설명:', tankData.valveADesc, tankData.valveBDesc);
+    
+    // tankData의 유효성 검사
+    if (!tankData || !tankData.valveState) {
+      console.log('tankData 또는 valveState가 유효하지 않음, 저장된 상태 확인');
+      // 저장된 상태 확인
+      const savedState = loadSystemState();
+      if (savedState && savedState.valveState) {
+        console.log('저장된 밸브 상태 발견:', savedState.valveState);
+        return {
+          valve1: parseInt(savedState.valveState[0]) || 0,
+          valve2: parseInt(savedState.valveState[1]) || 0,
+          valve1Desc: savedState.valveADesc || (parseInt(savedState.valveState[0]) === 1 ? '추출순환' : '전체순환'),
+          valve2Desc: savedState.valveBDesc || (parseInt(savedState.valveState[1]) === 1 ? 'ON' : 'OFF')
+        };
+      }
+      
+      // 기본값 반환
+      return { valve1: 0, valve2: 0, valve1Desc: '전체순환', valve2Desc: 'OFF' };
+    }
     
     // 특수 케이스: 0100 (밸브2 OFF, 밸브1 ON)
     if (tankData.valveState === '0100') {
@@ -594,11 +841,23 @@ export default function TankSystem({
       let valveADesc = tankData.valveADesc || '';
       let valveBDesc = tankData.valveBDesc || '';
       
+      // 설명이 없으면 상태에 따라 기본값 설정
+      if (!valveADesc) {
+        valveADesc = valveAState === 1 ? '추출순환' : '전체순환';
+      }
+      if (!valveBDesc) {
+        valveBDesc = valveBState === 1 ? 'ON' : 'OFF';
+      }
+      
       // 디버깅을 위한 로그
       console.log(`밸브 상태 파싱 결과: valveA=${valveAState} (${valveADesc}), valveB=${valveBState} (${valveBDesc})`);
       
       // 밸브 상태를 로컬 스토리지에 저장 (래퍼 함수 사용)
-      saveSystemState(tankData);
+      saveSystemState({
+        ...tankData,
+        valveADesc,
+        valveBDesc
+      });
       
       return {
         valve1: valveAState,
@@ -606,6 +865,28 @@ export default function TankSystem({
         valve1Desc: valveADesc,
         valve2Desc: valveBDesc
       };
+    }
+    
+    // valveState의 길이 확인
+    if (typeof tankData.valveState !== 'string' || tankData.valveState.length < 2) {
+      console.warn('valveState 형식 오류:', tankData.valveState);
+      
+      // localStorage에 저장된 상태 확인
+      const savedState = loadSystemState();
+      if (savedState && savedState.valveState && typeof savedState.valveState === 'string' && savedState.valveState.length >= 2) {
+        console.log('localStorage에서 밸브 상태 복원:', savedState.valveState);
+        const v1 = parseInt(savedState.valveState[0]) || 0;
+        const v2 = parseInt(savedState.valveState[1]) || 0;
+        return {
+          valve1: v1,
+          valve2: v2,
+          valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
+          valve2Desc: v2 === 1 ? 'ON' : 'OFF'
+        };
+      }
+      
+      // 기본값 반환
+      return { valve1: 0, valve2: 0, valve1Desc: '전체순환', valve2Desc: 'OFF' };
     }
     
     // 기존 로직 유지 (fallback)
@@ -638,7 +919,19 @@ export default function TankSystem({
         };
       }
       
-      return { valve1: 0, valve2: 0, valve1Desc: '', valve2Desc: '' };
+      // 최소 안전 길이 보장
+      const safeValveState = (tankData.valveState + '0000').slice(0, 4);
+      console.log('안전하게 보정된 밸브 상태:', safeValveState);
+      
+      const v1 = parseInt(safeValveState[0]) || 0;
+      const v2 = parseInt(safeValveState[1]) || 0;
+      
+      return {
+        valve1: v1, 
+        valve2: v2,
+        valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
+        valve2Desc: v2 === 1 ? 'ON' : 'OFF'
+      };
     }
 
     const v1 = parseInt(tankData.valveState[0]);
@@ -1048,15 +1341,6 @@ export default function TankSystem({
     setPumpSwitchPosition(prev => ({...prev, [draggingPump]: 0}));
     setDraggingPump(null);
   };
-
-  // 컴포넌트 마운트 시 저장된 상태 복원
-  useEffect(() => {
-    const savedState = loadSystemState();
-    if (savedState && savedState.timestamp) {
-      // 마지막 저장 시간 표시
-      setLastStateUpdate(new Date(savedState.timestamp));
-    }
-  }, []);
 
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
