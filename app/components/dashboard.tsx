@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useState, useEffect, useRef } from "react"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -42,12 +43,69 @@ const getCamStateTopic = (camNumber: number): string => {
 
 // TankSystem 컴포넌트를 동적으로 임포트
 const TankSystem = dynamic(
-  () => import('@/app/components/tank-system'),
+  () => import('@/app/components/tank-system').catch(err => {
+    console.error('탱크 시스템 컴포넌트 로드 실패:', err);
+    // 오류 발생 시 간단한 대체 컴포넌트 반환
+    return () => (
+      <div className="border border-red-300 rounded-md p-6 text-center">
+        <div className="text-xl font-semibold text-red-500 mb-2">컴포넌트 로드 실패</div>
+        <p className="text-gray-600">탱크 시스템 컴포넌트를 로드하는 중 오류가 발생했습니다.</p>
+        <p className="text-sm text-gray-500 mt-2">오류 세부 정보: {err.message}</p>
+      </div>
+    );
+  }),
   { 
     ssr: false,
-    loading: () => <div>탱크 시스템 로딩 중...</div>
+    loading: () => (
+      <div className="border border-gray-200 rounded-md p-6 bg-gray-50 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="animate-pulse mb-4 h-8 w-8 rounded-full bg-gray-300"></div>
+        <div className="text-gray-500 font-medium">탱크 시스템 로딩 중...</div>
+        <p className="text-sm text-gray-400 mt-2">잠시만 기다려주세요...</p>
+      </div>
+    )
   }
 )
+
+// 에러 바운더리 컴포넌트
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("탱크 시스템 컴포넌트 오류:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="border border-red-300 rounded-md p-6 text-center">
+          <div className="text-xl font-semibold text-red-500 mb-2">컴포넌트 오류 발생</div>
+          <p className="text-gray-600">탱크 시스템을 렌더링하는 중 오류가 발생했습니다.</p>
+          <p className="text-sm text-gray-500 mt-2">
+            오류 메시지: {this.state.error?.message || '알 수 없는 오류'}
+          </p>
+          <button
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            다시 시도
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // 서버에 상태 저장
 const saveStateToServer = async (state: any) => {
@@ -761,17 +819,19 @@ export default function Dashboard() {
                   </Button>
                 ))}
               </div>
-              <TankSystem 
-                tankData={tankData} 
-                onValveChange={changeValveState}
-                progressMessages={progressMessages}
-                onPumpToggle={togglePump}
-                onPumpReset={resetPump}
-                onPumpKCommand={sendPumpKCommand}
-                pumpStateMessages={pumpStateMessages}
-                mqttClient={mqttClient}
-                onExtractionCommand={sendExtractionCommand}
-              />
+              <ErrorBoundary>
+                <TankSystem 
+                  tankData={tankData} 
+                  onValveChange={changeValveState}
+                  progressMessages={progressMessages}
+                  onPumpToggle={togglePump}
+                  onPumpReset={resetPump}
+                  onPumpKCommand={sendPumpKCommand}
+                  pumpStateMessages={pumpStateMessages}
+                  mqttClient={mqttClient}
+                  onExtractionCommand={sendExtractionCommand}
+                />
+              </ErrorBoundary>
             </CardContent>
           </Card>
         </TabsContent>

@@ -327,6 +327,78 @@ export default function TankSystem({
   mqttClient,
   onExtractionCommand
 }: TankSystemProps) {
+  // MQTT 관련 코드를 안전하게 감싸기 위해 초기 상태를 설정합니다
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // 안전한 초기화를 위한 useEffect
+  useEffect(() => {
+    let isMounted = true;
+    
+    // 비동기 초기화 함수
+    const safeInitialize = async () => {
+      try {
+        // 여기서 초기화 작업 수행
+        console.log('탱크 시스템 컴포넌트 초기화 중...');
+        
+        // 마운트 상태 확인 - 언마운트 후 상태 업데이트 방지
+        if (!isMounted) return;
+        
+        // 초기화 성공
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('컴포넌트 초기화 오류:', error);
+        
+        if (!isMounted) return;
+        
+        // 오류 상태 설정
+        setHasError(true);
+        setErrorMessage(error instanceof Error ? error.message : '알 수 없는 오류');
+      }
+    };
+    
+    // 초기화 시작
+    safeInitialize();
+    
+    // 클린업 함수
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  
+  // 초기화 중인 경우 로딩 UI 표시
+  if (!isInitialized && !hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-6 bg-gray-50 rounded-md">
+        <div className="animate-pulse mb-4 h-8 w-8 rounded-full bg-gray-300"></div>
+        <div className="text-gray-500 font-medium">탱크 시스템 초기화 중...</div>
+      </div>
+    );
+  }
+  
+  // 오류가 발생한 경우 오류 UI 표시
+  if (hasError) {
+    return (
+      <div className="border border-red-300 rounded-md p-6 text-center">
+        <div className="text-xl font-semibold text-red-500 mb-2">컴포넌트 오류 발생</div>
+        <p className="text-gray-600">탱크 시스템을 초기화하는 중 오류가 발생했습니다.</p>
+        <p className="text-sm text-gray-500 mt-2">
+          오류 메시지: {errorMessage || '알 수 없는 오류'}
+        </p>
+        <button
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          onClick={() => window.location.reload()}
+        >
+          페이지 새로고침
+        </button>
+      </div>
+    );
+  }
+  
+  // 여기서 기존 컴포넌트 코드 계속
+  // ... existing code continues ...
+
   // 애니메이션을 위한 상태 추가
   const [fillPercentage, setFillPercentage] = useState<number>(0);
   
