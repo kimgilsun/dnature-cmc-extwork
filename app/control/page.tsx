@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import MqttClient from "@/lib/mqtt-client";
 
 // 간단한 알림 함수 정의
 const showAlert = (message: string) => {
@@ -49,37 +48,48 @@ export default function MqttControlPage() {
   useEffect(() => {
     console.log("MQTT 제어 페이지 마운트됨");
     
-    // MQTT 클라이언트 생성
-    const client = new MqttClient({
-      onConnect: () => {
-        console.log("MQTT 브로커에 연결됨");
-        setIsConnected(true);
-        showAlert("MQTT 연결 성공: MQTT 브로커에 연결되었습니다.");
-        
-        // 연결 시 서버에서 최신 명령 기록 불러오기
-        loadCommandHistoryFromServer();
-      },
-      onDisconnect: () => {
-        console.log("MQTT 브로커에서 연결 해제됨");
-        setIsConnected(false);
-        showAlert("MQTT 연결 해제: MQTT 브로커와의 연결이 해제되었습니다.");
-      },
-      onMessage: (topic: string, message: Buffer | string) => {
-        console.log(`메시지 수신: ${topic} - ${message.toString()}`);
-        // 메시지 처리 로직 추가
-      },
-      onError: (error: Error) => {
-        console.error("MQTT 오류:", error);
-        showAlert(`MQTT 오류: ${error.message}`);
-      }
+    // 동적으로 MQTT 클라이언트 모듈 로드
+    import('@/lib/mqtt-client').then(module => {
+      const createMqttClient = module.default;
+      
+      // MQTT 클라이언트 생성
+      const client = createMqttClient({
+        onConnect: () => {
+          console.log("MQTT 브로커에 연결됨");
+          setIsConnected(true);
+          showAlert("MQTT 연결 성공: MQTT 브로커에 연결되었습니다.");
+          
+          // 연결 시 서버에서 최신 명령 기록 불러오기
+          loadCommandHistoryFromServer();
+        },
+        onDisconnect: () => {
+          console.log("MQTT 브로커에서 연결 해제됨");
+          setIsConnected(false);
+          showAlert("MQTT 연결 해제: MQTT 브로커와의 연결이 해제되었습니다.");
+        },
+        onMessage: (topic: string, message: string) => {
+          console.log(`메시지 수신: ${topic} - ${message}`);
+          // 메시지 처리 로직 추가
+        },
+        onError: (error: Error) => {
+          console.error("MQTT 오류:", error);
+          showAlert(`MQTT 오류: ${error.message}`);
+        }
+      });
+      
+      // 연결 시도
+      client.connect();
+      
+      setMqttClient(client);
+    }).catch(error => {
+      console.error("MQTT 모듈 로드 실패:", error);
+      showAlert(`MQTT 모듈 로드 오류: ${error.message}`);
     });
-    
-    setMqttClient(client);
     
     // 컴포넌트 언마운트 시 MQTT 연결 해제
     return () => {
-      if (client) {
-        client.disconnect();
+      if (mqttClient) {
+        mqttClient.disconnect();
       }
     };
   }, []);
