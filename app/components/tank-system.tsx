@@ -936,77 +936,80 @@ export default function TankSystem({
         </div>
       )}
       
-      {/* 연결 상태 표시 추가 */}
-      <div className="absolute top-2 left-2 z-10">
-        <div className={`px-2 py-1 rounded text-[10px] flex items-center space-x-1 ${
-          connectionStatus.connected 
-            ? 'bg-green-50 text-green-700 border border-green-200' 
-            : 'bg-amber-50 text-amber-700 border border-amber-200'
-        }`}>
-          <div className={`w-2 h-2 rounded-full ${
-            connectionStatus.connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
-          }`}></div>
-          <span>
-            {connectionStatus.connected 
-              ? '연결됨' 
-              : connectionStatus.reconnecting ? '재연결 중...' : '연결 끊김'}
-          </span>
+      {/* 연결 상태 표시와 펌프 컨트롤 버튼을 함께 배치 */}
+      <div className="absolute top-2 right-24 z-10 flex space-x-4">
+        {/* 연결 상태 표시 */}
+        <div className="flex flex-col justify-center mr-2">
+          <div className={`px-2 py-1 rounded text-[10px] flex items-center space-x-1 ${
+            connectionStatus.connected 
+              ? 'bg-green-50 text-green-700 border border-green-200' 
+              : 'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              connectionStatus.connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+            }`}></div>
+            <span>
+              {connectionStatus.connected 
+                ? '연결됨' 
+                : connectionStatus.reconnecting ? '재연결 중...' : '연결 끊김'}
+            </span>
+          </div>
+          
+          {lastStateUpdate && (
+            <div className="mt-1 bg-white/80 px-2 py-1 rounded text-[10px] text-gray-500 border border-gray-100">
+              마지막 업데이트: {lastStateUpdate.toLocaleTimeString()}
+            </div>
+          )}
         </div>
         
-        {lastStateUpdate && (
-          <div className="mt-1 bg-white/80 px-2 py-1 rounded text-[10px] text-gray-500 border border-gray-100">
-            마지막 업데이트: {lastStateUpdate.toLocaleTimeString()}
-          </div>
-        )}
-      </div>
-      
-      {/* 펌프 상태 컨트롤 버튼 - 상단에 추가 */}
-      <div className="absolute top-2 right-24 z-10 flex space-x-2">
-        {Array(6).fill(0).map((_, i) => {
-          const pumpNum = i + 1;
-          const pumpStatus = tankData.tanks[i].pumpStatus;
-          
-          return (
-            <div key={`pump-control-${pumpNum}`} className="flex items-center">
-              <button 
-                className={`px-4 py-1 rounded text-[10px] ${
-                  pumpStatus === "ON" 
-                    ? 'bg-green-100 text-green-700 border border-green-300' 
-                    : 'bg-red-100 text-red-700 border border-red-300'
-                }`}
-                onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
-              >
-                펌프 {pumpNum}: {pumpStatus}
-              </button>
-              
-              {/* R 버튼 - 펌프 버튼 옆에 추가 */}
-              <button 
-                className="ml-1 w-6 h-6 rounded bg-red-100 text-red-700 border border-red-300"
-                onClick={() => {
-                  if (onPumpReset) {
-                    onPumpReset(pumpNum);
-                    // "3" 명령 발행
-                    if (mqttClient) {
-                      const pumpTopic = `extwork/pump${pumpNum}/cmd`;
-                      mqttClient.publish(pumpTopic, "3");
-                      // 알림 발행
-                      const notification = {
-                        type: 'pump-reset',
-                        pumpId: pumpNum,
-                        timestamp: Date.now(),
-                        clientId: clientId.current,
-                        message: `펌프 ${pumpNum} 리셋 명령(3)이 실행되었습니다.`
-                      };
-                      mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+        {/* 펌프 상태 컨트롤 버튼 */}
+        <div className="flex space-x-2">
+          {Array(6).fill(0).map((_, i) => {
+            const pumpNum = i + 1;
+            const pumpStatus = tankData.tanks[i].pumpStatus;
+            
+            return (
+              <div key={`pump-control-${pumpNum}`} className="flex items-center">
+                <button 
+                  className={`px-4 py-1 rounded text-[10px] ${
+                    pumpStatus === "ON" 
+                      ? 'bg-green-100 text-green-700 border border-green-300' 
+                      : 'bg-red-100 text-red-700 border border-red-300'
+                  }`}
+                  onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
+                >
+                  펌프 {pumpNum}: {pumpStatus}
+                </button>
+                
+                {/* R 버튼 - 펌프 버튼 옆에 추가 */}
+                <button 
+                  className="ml-1 w-6 h-6 rounded bg-red-100 text-red-700 border border-red-300"
+                  onClick={() => {
+                    if (onPumpReset) {
+                      onPumpReset(pumpNum);
+                      // "3" 명령 발행
+                      if (mqttClient) {
+                        const pumpTopic = `extwork/pump${pumpNum}/cmd`;
+                        mqttClient.publish(pumpTopic, "3");
+                        // 알림 발행
+                        const notification = {
+                          type: 'pump-reset',
+                          pumpId: pumpNum,
+                          timestamp: Date.now(),
+                          clientId: clientId.current,
+                          message: `펌프 ${pumpNum} 리셋 명령(3)이 실행되었습니다.`
+                        };
+                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+                      }
                     }
-                  }
-                }}
-              >
-                R
-              </button>
-            </div>
-          )
-        })}
+                  }}
+                >
+                  R
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
       
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
