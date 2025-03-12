@@ -1149,24 +1149,45 @@ export default function TankSystem({
                 />
               )}
               
-              {/* K 스위치 위치 조정 - 우측 상단에 고정 (소문자 k 발행) */}
+              {/* K 스위치 - 펌프1 근처로 이동 */}
               <g 
                 className="cursor-pointer"
                 onClick={() => onPumpKCommand && onPumpKCommand(1)}
               >
                 <circle
-                  cx={550}
-                  cy={50}
+                  cx={pumpPos.x + 55}
+                  cy={pumpPos.y - 15}
                   r={15}
                   className="fill-white stroke-blue-500 stroke-2"
                 />
                 <text
-                  x={550}
-                  y={54}
+                  x={pumpPos.x + 55}
+                  y={pumpPos.y - 11}
                   textAnchor="middle"
                   className="text-blue-600 font-bold text-sm"
                 >
                   k
+                </text>
+              </g>
+              
+              {/* 리셋 버튼 추가 - 펌프1 근처에 위치 */}
+              <g 
+                className="cursor-pointer"
+                onClick={() => onPumpReset && onPumpReset(1)}
+              >
+                <circle
+                  cx={pumpPos.x - 55}
+                  cy={pumpPos.y - 15}
+                  r={15}
+                  className="fill-white stroke-red-500 stroke-2"
+                />
+                <text
+                  x={pumpPos.x - 55}
+                  y={pumpPos.y - 11}
+                  textAnchor="middle"
+                  className="text-red-600 font-bold text-[10px]"
+                >
+                  리셋
                 </text>
               </g>
               
