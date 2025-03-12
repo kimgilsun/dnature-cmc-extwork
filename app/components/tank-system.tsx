@@ -968,8 +968,9 @@ export default function TankSystem({
           
           return (
             <div key={`pump-control-${pumpNum}`} className="flex flex-col items-center">
+              {/* R 버튼 - 상단에 추가 */}
               <button 
-                className="mb-1 px-2 py-1 rounded text-[10px] bg-red-100 text-red-700 border border-red-300"
+                className="mb-1 w-8 h-8 rounded bg-red-100 text-red-700 border border-red-300"
                 onClick={() => {
                   if (onPumpReset) {
                     onPumpReset(pumpNum);
@@ -992,6 +993,7 @@ export default function TankSystem({
               >
                 R
               </button>
+              
               <button 
                 className={`px-4 py-1 rounded text-[10px] ${
                   pumpStatus === "ON" 
