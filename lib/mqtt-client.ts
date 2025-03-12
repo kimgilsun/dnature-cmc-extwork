@@ -94,6 +94,16 @@ class MqttClient {
           this.client?.subscribe(topic);
         });
         
+        // 연결 후 밸브 상태 요청 메시지 발행
+        console.log("연결 성공 - 현재 밸브 상태 요청 메시지 준비 중...");
+        setTimeout(() => {
+          // 약간의 지연 후에 상태 요청 메시지 발행 (모든 구독이 완료되도록)
+          if (this.client?.connected) {
+            this.client.publish("extwork/valve/input", "STATUS");
+            console.log("밸브 상태 요청 메시지 발행 완료: extwork/valve/input - STATUS");
+          }
+        }, 1000);
+        
         this.onConnect();
       });
 

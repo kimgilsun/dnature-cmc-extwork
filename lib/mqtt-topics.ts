@@ -157,23 +157,44 @@ export function parseTankLevelMessage(message: string): {
  * @param message 밸브 상태 메시지 (예: "1000", "0100", "0000")
  * @returns 파싱된 밸브 상태 객체
  */
-export function parseValveStateMessage(message: string): {
-  valveState: string;
-  description: string;
-} {
-  let description = "";
+export function parseValveStateMessage(message: string): { valveState: string; valveADesc?: string; valveBDesc?: string; } {
+  let valveState = "";
+  let valveADesc = "";
+  let valveBDesc = "";
   
-  if (message === "1000") {
-    description = "추출 순환";
-  } else if (message === "0100") {
-    description = "전체 순환";
-  } else if (message === "0000") {
-    description = "본탱크 수집";
-  } else {
-    description = "알 수 없는 상태";
+  // 메시지 형식: 4자리 0, 1 문자열 (예: "1000", "0100", "0000")
+  if (message.match(/^[0-1]{4}$/)) {
+    valveState = message;
+    
+    // 설명 추가
+    switch (message) {
+      case "1000":
+        valveADesc = "추출순환";
+        valveBDesc = "닫힘";
+        break;
+      case "0100":
+        valveADesc = "닫힘";
+        valveBDesc = "삼투";
+        break;
+      case "0000":
+        valveADesc = "닫힘";
+        valveBDesc = "닫힘";
+        break;
+    }
+  } 
+  // STATUS 요청 처리 - 이 부분은 실제로 서버가 처리하지만, 클라이언트 측에서도 인식할 수 있도록 추가
+  else if (message === "STATUS") {
+    // 이 경우는 상태 요청 메시지이므로 실제 값을 설정하지 않음
+    console.log("밸브 상태 요청 메시지 인식됨");
+    return { valveState: "" };
+  }
+  // 기타 다른 형식의 메시지
+  else {
+    console.warn("지원되지 않는 밸브 상태 메시지 형식:", message);
+    return { valveState: "" };
   }
   
-  return { valveState: message, description };
+  return { valveState, valveADesc, valveBDesc };
 }
 
 /**
