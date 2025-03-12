@@ -936,81 +936,7 @@ export default function TankSystem({
         </div>
       )}
       
-      {/* 연결 상태 표시와 펌프 컨트롤 버튼을 함께 배치 */}
-      <div className="absolute top-2 right-24 z-10 flex space-x-4">
-        {/* 연결 상태 표시 */}
-        <div className="flex flex-col justify-center mr-2">
-          <div className={`px-2 py-1 rounded text-[10px] flex items-center space-x-1 ${
-            connectionStatus.connected 
-              ? 'bg-green-50 text-green-700 border border-green-200' 
-              : 'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${
-              connectionStatus.connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
-            }`}></div>
-            <span>
-              {connectionStatus.connected 
-                ? '연결됨' 
-                : connectionStatus.reconnecting ? '재연결 중...' : '연결 끊김'}
-            </span>
-          </div>
-          
-          {lastStateUpdate && (
-            <div className="mt-1 bg-white/80 px-2 py-1 rounded text-[10px] text-gray-500 border border-gray-100">
-              마지막 업데이트: {lastStateUpdate.toLocaleTimeString()}
-            </div>
-          )}
-        </div>
-        
-        {/* 펌프 상태 컨트롤 버튼 */}
-        <div className="flex space-x-2">
-          {Array(6).fill(0).map((_, i) => {
-            const pumpNum = i + 1;
-            const pumpStatus = tankData.tanks[i].pumpStatus;
-            
-            return (
-              <div key={`pump-control-${pumpNum}`} className="flex items-center">
-                <button 
-                  className={`px-4 py-1 rounded text-[10px] ${
-                    pumpStatus === "ON" 
-                      ? 'bg-green-100 text-green-700 border border-green-300' 
-                      : 'bg-red-100 text-red-700 border border-red-300'
-                  }`}
-                  onClick={() => onPumpToggle && onPumpToggle(pumpNum)}
-                >
-                  펌프 {pumpNum}: {pumpStatus}
-                </button>
-                
-                {/* R 버튼 - 펌프 버튼 옆에 추가 */}
-                <button 
-                  className="ml-1 w-6 h-6 rounded bg-red-100 text-red-700 border border-red-300"
-                  onClick={() => {
-                    if (onPumpReset) {
-                      onPumpReset(pumpNum);
-                      // "3" 명령 발행
-                      if (mqttClient) {
-                        const pumpTopic = `extwork/pump${pumpNum}/cmd`;
-                        mqttClient.publish(pumpTopic, "3");
-                        // 알림 발행
-                        const notification = {
-                          type: 'pump-reset',
-                          pumpId: pumpNum,
-                          timestamp: Date.now(),
-                          clientId: clientId.current,
-                          message: `펌프 ${pumpNum} 리셋 명령(3)이 실행되었습니다.`
-                        };
-                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                      }
-                    }
-                  }}
-                >
-                  R
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {/* 상단 컨트롤 패널 제거 */}
       
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 */}
@@ -1204,43 +1130,7 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* 리셋 버튼 추가 - 펌프 "OFF" 텍스트 옆에 배치 */}
-                <g 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    if (onPumpReset) {
-                      onPumpReset(1);
-                      // MQTT 메시지 발행
-                      if (mqttClient) {
-                        mqttClient.publish('extwork/inverter1/command', "reset");
-                        // 알림 발행
-                        const notification = {
-                          type: 'pump-reset',
-                          pumpId: 1,
-                          timestamp: Date.now(),
-                          clientId: clientId.current,
-                          message: `펌프 1 리셋 명령이 실행되었습니다.`
-                        };
-                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                      }
-                    }
-                  }}
-                >
-                  <circle
-                    cx={pumpPos.x}
-                    cy={pumpPos.y - 45}
-                    r={15}
-                    className="fill-red-100 stroke-red-500 stroke-2"
-                  />
-                  <text
-                    x={pumpPos.x}
-                    y={pumpPos.y - 41}
-                    textAnchor="middle"
-                    className="text-red-600 font-bold text-sm"
-                  >
-                    R
-                  </text>
-                </g>
+                {/* 리셋 버튼 제거 */}
                 
                 {/* K 스위치 - 1번 탱크 우측 상단으로 이동 */}
                 <g 
@@ -1347,43 +1237,7 @@ export default function TankSystem({
                   />
                 )}
                 
-                {/* 리셋 버튼 추가 - 펌프 "OFF" 텍스트 옆에 배치 */}
-                <g 
-                  className="cursor-pointer"
-                  onClick={() => {
-                    if (onPumpReset) {
-                      onPumpReset(2);
-                      // MQTT 메시지 발행
-                      if (mqttClient) {
-                        mqttClient.publish('extwork/inverter2/command', "reset");
-                        // 알림 발행
-                        const notification = {
-                          type: 'pump-reset',
-                          pumpId: 2,
-                          timestamp: Date.now(),
-                          clientId: clientId.current,
-                          message: `펌프 2 리셋 명령이 실행되었습니다.`
-                        };
-                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                      }
-                    }
-                  }}
-                >
-                  <circle
-                    cx={pumpPos.x + 45}
-                    cy={pumpPos.y}
-                    r={15}
-                    className="fill-red-100 stroke-red-500 stroke-2"
-                  />
-                  <text
-                    x={pumpPos.x + 45}
-                    y={pumpPos.y + 4}
-                    textAnchor="middle"
-                    className="text-red-600 font-bold text-sm"
-                  >
-                    R
-                  </text>
-                </g>
+                {/* 리셋 버튼 제거 */}
                 
                 {/* 상태 메시지 표시 */}
                 {stateMessage && (
