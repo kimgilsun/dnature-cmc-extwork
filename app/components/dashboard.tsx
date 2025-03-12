@@ -433,6 +433,46 @@ export default function Dashboard() {
     }
   }
 
+  // 펌프 토글 (ON/OFF) 함수 추가
+  const togglePump = (pumpId: number) => {
+    if (!mqttClient) return;
+    
+    // 현재 펌프 상태 확인
+    const currentState = tankData.tanks[pumpId - 1]?.pumpStatus || "OFF";
+    // 토글할 새 상태
+    const newState = currentState === "ON" ? "OFF" : "ON";
+    // 메시지 값 (ON -> 1, OFF -> 0)
+    const messageValue = newState === "ON" ? "1" : "0";
+    
+    console.log(`펌프 ${pumpId} 토글: ${currentState} -> ${newState}`);
+    
+    // 명령 발행
+    const topic = getPumpCommandTopic(pumpId);
+    mqttClient.publish(topic, messageValue);
+    
+    // 상태 즉시 업데이트 (UI 반응성 향상)
+    setTankData(prev => {
+      const updatedTanks = prev.tanks.map(tank => {
+        if (tank.id === pumpId) {
+          return { ...tank, pumpStatus: newState };
+        }
+        return tank;
+      });
+      return { ...prev, tanks: updatedTanks };
+    });
+  };
+  
+  // 펌프 리셋 함수 추가
+  const resetPump = (pumpId: number) => {
+    if (!mqttClient) return;
+    
+    console.log(`펌프 ${pumpId} 리셋 명령 발행`);
+    
+    // 리셋 명령(3) 발행
+    const topic = getPumpCommandTopic(pumpId);
+    mqttClient.publish(topic, "3");
+  };
+
   // MQTT 브로커에 연결
   const connectMqtt = () => {
     if (mqttClient) {
@@ -446,14 +486,6 @@ export default function Dashboard() {
 
     mqttClient.publish(topic, message)
     setMessage("")
-  }
-
-  // 펌프 상태 변경 함수
-  const togglePump = (inverterId: number, newState: "ON" | "OFF") => {
-    if (mqttClient) {
-      const state = newState === "ON" ? "1" : "0"
-      mqttClient.publish(getPumpCommandTopic(inverterId), state)
-    }
   }
 
   // 토픽 구독 함수
@@ -530,7 +562,7 @@ export default function Dashboard() {
                   <Button 
                     key={tank.id} 
                     variant={tank.pumpStatus === "ON" ? "default" : "outline"}
-                    onClick={() => togglePump(tank.id, tank.pumpStatus === "ON" ? "OFF" : "ON")}
+                    onClick={() => togglePump(tank.id)}
                     size="sm" 
                     className="text-xs"
                   >
@@ -542,6 +574,8 @@ export default function Dashboard() {
                 tankData={tankData} 
                 onValveChange={changeValveState}
                 progressMessages={progressMessages}
+                onPumpToggle={togglePump}
+                onPumpReset={resetPump}
               />
             </CardContent>
           </Card>

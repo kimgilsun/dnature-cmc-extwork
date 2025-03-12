@@ -27,6 +27,8 @@ interface TankSystemProps {
   }
   onValveChange: (newState: string) => void
   progressMessages?: Array<{timestamp: number, message: string, rawJson?: string | null}>
+  onPumpToggle?: (pumpId: number) => void  // 펌프 ON/OFF 토글 함수 추가
+  onPumpReset?: (pumpId: number) => void   // 펌프 리셋 함수 추가
 }
 
 // 추출 진행 메시지를 위한 인터페이스
@@ -50,10 +52,72 @@ const pulseCss = `
   }
 `;
 
-export default function TankSystem({ tankData, onValveChange, progressMessages = [] }: TankSystemProps) {
+export default function TankSystem({ tankData, onValveChange, progressMessages = [], onPumpToggle, onPumpReset }: TankSystemProps) {
   // 애니메이션을 위한 상태 추가
   const [fillPercentage, setFillPercentage] = useState<number>(0);
   
+  // 길게 누르기 감지를 위한 타이머 상태 추가
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [currentPressedPump, setCurrentPressedPump] = useState<number | null>(null);
+  
+  // 펌프 버튼 마우스 다운 핸들러
+  const handlePumpMouseDown = (pumpId: number) => {
+    setCurrentPressedPump(pumpId);
+    
+    // 길게 누르기 감지 타이머 설정 (1초 후 리셋 명령 발생)
+    const timer = setTimeout(() => {
+      console.log(`펌프 ${pumpId} 길게 누름 감지 - 리셋 명령 실행`);
+      if (onPumpReset) {
+        onPumpReset(pumpId);
+      }
+      setCurrentPressedPump(null);
+    }, 1000);
+    
+    setLongPressTimer(timer);
+  };
+  
+  // 펌프 버튼 마우스 업 핸들러
+  const handlePumpMouseUp = (pumpId: number) => {
+    // 타이머가 있으면 취소 (길게 누르기 취소)
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    
+    // 현재 누른 펌프가 있고, 마우스 업 이벤트가 발생한 펌프와 같으면 클릭으로 간주
+    if (currentPressedPump === pumpId) {
+      console.log(`펌프 ${pumpId} 클릭 - 토글 명령 실행`);
+      if (onPumpToggle) {
+        onPumpToggle(pumpId);
+      }
+    }
+    
+    setCurrentPressedPump(null);
+  };
+  
+  // 마우스가 펌프 밖으로 나갔을 때 핸들러
+  const handlePumpMouseLeave = () => {
+    // 타이머가 있으면 취소
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    setCurrentPressedPump(null);
+  };
+  
+  // 터치 이벤트 핸들러 (모바일)
+  const handlePumpTouchStart = (pumpId: number) => {
+    handlePumpMouseDown(pumpId);
+  };
+  
+  const handlePumpTouchEnd = (pumpId: number) => {
+    handlePumpMouseUp(pumpId);
+  };
+  
+  const handlePumpTouchCancel = () => {
+    handlePumpMouseLeave();
+  };
+
   // 추출 진행 상황에서 탱크 채움 비율 계산
   useEffect(() => {
     if (progressMessages.length > 0) {
@@ -735,6 +799,126 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           <circle cx="737" cy="838" r="7.5" className="fill-gray-200 stroke-gray-400 stroke-1" />
           <text x="755" y="843">펌프 OFF</text>
         </g>
+
+        {/* 펌프 (3~6번) - 탱크 사이에 배치 */}
+        {Array(4)
+          .fill(0)
+          .map((_, index) => {
+            const currentTankIndex = index + 1 // 2, 3, 4, 5번 탱크부터 시작
+            const nextTankIndex = (currentTankIndex + 1) % 6 // 3, 4, 5, 6번 탱크
+            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
+            const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
+            const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
+            
+            return (
+              <g key={`pump-${pumpNum}`}>
+                {/* 인버터 펌프 */}
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius}
+                  className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                  fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                  onMouseDown={() => onPumpToggle && handlePumpMouseDown(pumpNum)}
+                  onMouseUp={() => onPumpToggle && handlePumpMouseUp(pumpNum)}
+                  onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
+                  onTouchStart={() => onPumpToggle && handlePumpTouchStart(pumpNum)}
+                  onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(pumpNum)}
+                  onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+                />
+                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                  IP_{pumpNum}
+                </text>
+                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                  {tank.pumpStatus}
+                </text>
+                {currentPressedPump === pumpNum && (
+                  <circle
+                    cx={pumpPos.x}
+                    cy={pumpPos.y}
+                    r={pumpRadius + 5}
+                    className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                  />
+                )}
+              </g>
+            )
+          })}
+
+        {/* 1번 펌프 (6번과 1번 탱크 사이) */}
+        {(() => {
+          const pumpPos = calculatePumpPosition(5, 0)
+          const tank = tankData.tanks[0] // 1번 펌프 = 0번 인덱스
+          
+          return (
+            <g key="pump-1">
+              <circle
+                cx={pumpPos.x}
+                cy={pumpPos.y}
+                r={pumpRadius}
+                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                onMouseDown={() => onPumpToggle && handlePumpMouseDown(1)}
+                onMouseUp={() => onPumpToggle && handlePumpMouseUp(1)}
+                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
+                onTouchStart={() => onPumpToggle && handlePumpTouchStart(1)}
+                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(1)}
+                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+              />
+              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                IP_1
+              </text>
+              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                {tank.pumpStatus}
+              </text>
+              {currentPressedPump === 1 && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 5}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
+            </g>
+          )
+        })()}
+
+        {/* 2번 펌프 (1번과 2번 탱크 사이) - 추가 */}
+        {(() => {
+          const pumpPos = calculatePumpPosition(0, 1)
+          const tank = tankData.tanks[1] // 2번 펌프 = 1번 인덱스
+          
+          return (
+            <g key="pump-2">
+              <circle
+                cx={pumpPos.x}
+                cy={pumpPos.y}
+                r={pumpRadius}
+                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                onMouseDown={() => onPumpToggle && handlePumpMouseDown(2)}
+                onMouseUp={() => onPumpToggle && handlePumpMouseUp(2)}
+                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
+                onTouchStart={() => onPumpToggle && handlePumpTouchStart(2)}
+                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(2)}
+                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+              />
+              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                IP_2
+              </text>
+              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                {tank.pumpStatus}
+              </text>
+              {currentPressedPump === 2 && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 5}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
+            </g>
+          )
+        })()}
       </svg>
 
       {/* 추출 진행 상황 표시 하단 박스로 이동 */}
