@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev & node server/websocket.js",
+    "next-dev": "next dev",
     "build": "next build",
     "start": "next start & node server/websocket.js",
     "lint": "next lint",

@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 import { MqttClient } from "mqtt"
 import { cn } from '@/lib/utils';
-import "./tank-system.css"; // 새로 생성한 CSS 파일 import
+import { Progress } from "@/components/ui/progress";
 
 interface Tank {
   id: number
@@ -22,11 +22,9 @@ interface TankSystemProps {
     tanks: Tank[]
     valveState: string
     valveStatusMessage?: string
-    valveADesc?: string  // 밸브 A 설명 추가
-    valveBDesc?: string  // 밸브 B 설명 추가
   }
   onValveChange: (newState: string) => void
-  progressMessages?: Array<{timestamp: number, message: string, rawJson?: string | null}>
+  progressMessages?: Array<string | {timestamp: number, message: string}>
 }
 
 // 추출 진행 메시지를 위한 인터페이스
@@ -58,7 +56,9 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
   useEffect(() => {
     if (progressMessages.length > 0) {
       const latestProgress = progressMessages[progressMessages.length - 1];
-      const latestMessage = latestProgress.message;
+      const latestMessage = typeof latestProgress === 'string' 
+        ? latestProgress 
+        : latestProgress.message;
       
       // 시간 정보 추출 (84s | 140s 또는 427/215s 형식)
       const timeMatch = latestMessage.match(/(\d+)s?\s*[\|\/]\s*(\d+)s?/);
@@ -90,20 +90,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
     }
   };
 
-  // 탱크 상태에 따른 상세 메시지 반환
-  const getStatusMessage = (status: string, level: number) => {
-    switch (status) {
-      case "full":
-        return "가득 차있음";
-      case "empty":
-        return level <= 5 ? "비었음" : `${level}% 잔여`;
-      case "filling":
-        return `채워지는 중 (${Math.round(fillPercentage)}%)`;
-      default:
-        return `${level}% 잔여`;
-    }
-  };
-
   // 채워지는 애니메이션을 위한 스타일 계산
   const getFillingStyle = (status: string) => {
     if (status === "filling") {
@@ -118,60 +104,18 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
 
   // 밸브 상태 파싱 (4자리 문자열에서 첫 두 자리만 사용)
   const parseValveState = () => {
-    // 디버깅용 로그
-    console.log('밸브 상태 파싱 시작 - 밸브 상태 메시지:', tankData.valveStatusMessage);
-    console.log('현재 밸브 상태 문자열:', tankData.valveState);
-    console.log('밸브 설명:', tankData.valveADesc, tankData.valveBDesc);
-    
-    // 특수 케이스: 0100 (3웨이 밸브 OFF, 2웨이 밸브 ON)
-    if (tankData.valveState === '0100') {
-      console.log('특수 케이스 감지: 0100 - 3웨이 밸브 OFF, 2웨이 밸브 ON');
-      return {
-        valve1: 0, // 3웨이 밸브 OFF
-        valve2: 1, // 2웨이 밸브 ON
-        valve1Desc: tankData.valveADesc || '전체순환_교환',
-        valve2Desc: tankData.valveBDesc || '열림'
-      };
-    }
-    
-    // valveStatusMessage를 우선적으로 확인하여 상태 파싱
-    if (tankData.valveStatusMessage) {
-      // 'valveA=ON' 또는 'valveA=OFF' 포함 여부 정확히 체크
-      const valveAState = tankData.valveStatusMessage.includes('valveA=ON') ? 1 : 0;
-      const valveBState = tankData.valveStatusMessage.includes('valveB=ON') ? 1 : 0;
-      
-      // 밸브 설명 텍스트 - dashboard.tsx에서 파싱된 값 사용
-      let valveADesc = tankData.valveADesc || '';
-      let valveBDesc = tankData.valveBDesc || '';
-      
-      // 디버깅을 위한 로그
-      console.log(`밸브 상태 파싱 결과: valveA=${valveAState} (${valveADesc}), valveB=${valveBState} (${valveBDesc})`);
-      
-      return {
-        valve1: valveAState,
-        valve2: valveBState,
-        valve1Desc: valveADesc,
-        valve2Desc: valveBDesc
-      };
-    }
-    
-    // 기존 로직 유지 (fallback)
+    // 밸브 상태가 4자리가 아니면 기본값 사용
     if (tankData.valveState.length !== 4) {
-      return { valve1: 0, valve2: 0, valve1Desc: '', valve2Desc: '' };
+      return { valve1: 0, valve2: 0 }
     }
-
-    const v1 = parseInt(tankData.valveState[0]);
-    const v2 = parseInt(tankData.valveState[1]);
 
     return {
-      valve1: v1,
-      valve2: v2,
-      valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
-      valve2Desc: v2 === 1 ? '열림' : '닫힘'
-    };
-  };
+      valve1: Number.parseInt(tankData.valveState[0]),
+      valve2: Number.parseInt(tankData.valveState[1]),
+    }
+  }
 
-  const { valve1, valve2, valve1Desc, valve2Desc } = parseValveState();
+  const { valve1, valve2 } = parseValveState()
 
   // 경로 활성화 여부 확인
   const isPathActive = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
@@ -207,7 +151,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
     if (valve1 === 1) {
       return "추출 순환"
     } else if (valve2 === 1) {
-      return "전체 순환 (열림)"
+      return "전체 순환"
     } else {
       return "밸브 닫힘"
     }
@@ -215,14 +159,10 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
 
   // 다음 밸브 상태 가져오기 (순환)
   const getNextValveState = () => {
-    console.log('현재 밸브 상태:', tankData.valveState);
-    // 0100 상태에서 클릭하면 1000 상태로 변경
-    if (tankData.valveState === "0100") return "1000"
-    // 1000 상태에서 클릭하면 0000 상태로 변경
-    if (tankData.valveState === "1000") return "0000"
-    // 0000 상태에서 클릭하면 0100 상태로 변경
-    if (tankData.valveState === "0000") return "0100"
-    return "0100" // 기본값
+    if (tankData.valveState === "1000") return "0100"
+    if (tankData.valveState === "0100") return "0000"
+    if (tankData.valveState === "0000") return "1000"
+    return "1000" // 기본값
   }
 
   // 원형 레이아웃을 위한 계산
@@ -414,15 +354,18 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
     return { x: point.x, y: point.y };
   };
 
-  // 파이프가 활성화 상태인지 확인
-  const isPipeActive = (pumpIndex: number, valveCondition: boolean = true) => {
-    return tankData.tanks[pumpIndex].pumpStatus === "ON" && valveCondition;
-  }
-
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
       {/* 펄스 애니메이션 스타일 추가 */}
       <style>{pulseCss}</style>
+      
+      <div className="absolute top-5 left-5 bg-gray-50 text-gray-700 px-3 py-1 rounded-md text-xs font-medium">
+        {progressMessages.length > 0 ? 
+          (typeof progressMessages[progressMessages.length - 1] === 'string' 
+            ? progressMessages[progressMessages.length - 1] 
+            : (progressMessages[progressMessages.length - 1] as {message: string}).message) 
+          : "대기 중..."}
+      </div>
       
       <svg viewBox="0 0 1000 800" className="w-full h-full">
         {/* 본탱크 - 원형에서 사각형으로 변경 및 크기 확대 */}
@@ -448,26 +391,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         <text x={mainTankPosition.x} y={mainTankPosition.y} textAnchor="middle" className="text-sm font-bold fill-black">
           {mainTankPosition.label}
         </text>
-        
-        {/* 본탱크 상태 메시지 텍스트 박스 */}
-        <g>
-          <rect
-            x={mainTankPosition.x - mainTankPosition.width / 2}
-            y={mainTankPosition.y + mainTankPosition.height / 2 + 5}
-            width={mainTankPosition.width}
-            height={20}
-            rx="3"
-            className="fill-gray-100 stroke-gray-300 stroke-1"
-          />
-          <text
-            x={mainTankPosition.x}
-            y={mainTankPosition.y + mainTankPosition.height / 2 + 18}
-            textAnchor="middle"
-            className="text-[9px] fill-gray-700"
-          >
-            {getStatusMessage(tankData.mainTank.status, tankData.mainTank.level)}
-          </text>
-        </g>
 
         {/* 탱크 연결 파이프 - 직선으로 연결 (2-3, 3-4, 4-5, 5-6번 탱크만) */}
         {Array(4)
@@ -514,7 +437,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {/* 3way 밸브에서 본탱크로의 경로 */}
         <path
           d={calculate3wayToMainPath()}
-          className={`stroke-[12] ${(valve1 === 0 && isPipeActive(5)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${(valve1 === 0 && tankData.tanks[5].pumpStatus === "ON") ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -530,7 +453,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {/* 2way 밸브에서 펌프1 입구 합류 지점으로의 경로 */}
         <path
           d={calculate2wayToPump1Path()}
-          className={`stroke-[12] ${(valve2 === 1 && isPipeActive(0)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${(valve2 === 1 && tankData.tanks[0].pumpStatus === "ON") ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -538,7 +461,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {/* 3way 밸브에서 펌프1 입구 합류 지점까지의 경로 */}
         <path
           d={calculate3wayToPump1Path()}
-          className={`stroke-[12] ${(valve1 === 1 && isPipeActive(5)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${(valve1 === 1 && tankData.tanks[5].pumpStatus === "ON") ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -546,7 +469,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {/* 합류 지점에서 펌프1로의 경로 */}
         <path
           d={calculateMergeToPump1Path()}
-          className={`stroke-[12] ${((valve1 === 1 && isPipeActive(5)) || (valve2 === 1)) && isPipeActive(0) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${((valve1 === 1 && tankData.tanks[5].pumpStatus === "ON") || (valve2 === 1)) && tankData.tanks[0].pumpStatus === "ON" ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -554,7 +477,7 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
         {/* 1번 펌프에서 1번 탱크로의 경로 */}
         <path
           d={calculatePump1To1Path()}
-          className={`stroke-[12] ${isPipeActive(0) && ((valve1 === 1 && isPipeActive(5)) || (valve2 === 1)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${tankData.tanks[0].pumpStatus === "ON" && ((valve1 === 1 && tankData.tanks[5].pumpStatus === "ON") || (valve2 === 1)) ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -683,26 +606,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
               <text x={pos.x} y={pos.y} textAnchor="middle" className="text-sm font-bold fill-black font-semibold z-10">
                 {pos.label}
               </text>
-              
-              {/* 탱크 상태 메시지 텍스트 박스 */}
-              <g>
-                <rect
-                  x={pos.x - tankWidth / 2}
-                  y={pos.y + tankHeight / 2 + 5}
-                  width={tankWidth}
-                  height={20}
-                  rx="3"
-                  className="fill-gray-100 stroke-gray-300 stroke-1"
-                />
-                <text
-                  x={pos.x}
-                  y={pos.y + tankHeight / 2 + 18}
-                  textAnchor="middle"
-                  className="text-[9px] fill-gray-700"
-                >
-                  {getStatusMessage(tank.status, tank.level)}
-                </text>
-              </g>
             </g>
           )
         })}
@@ -742,13 +645,10 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
             3way 밸브
           </text>
           <text x="0" y="35" textAnchor="middle" className="text-[10px]">
-            {valve1 === 1 ? "1000" : "0100/0000"}
+            {valve1 === 1 ? "1000" : "0100"}
           </text>
           <text x="0" y={valve1 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
-            {valve1 === 1 ? "ON" : "OFF"}
-          </text>
-          <text x="0" y="50" textAnchor="middle" className="text-[10px] text-gray-700">
-            {valve1 === 1 ? "추출순환" : valve1Desc || "전체순환"}
+            {valve1 === 1 ? "추출순환" : "전체순환"}
           </text>
         </g>
 
@@ -787,14 +687,47 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
             2way 밸브
           </text>
           <text x="0" y="35" textAnchor="middle" className="text-[10px]">
-            {valve2 === 1 ? "0100" : "0000/1000"}
+            {valve2 === 1 ? "0100" : ""}
           </text>
           <text x="0" y={valve2 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve2 === 1 ? "ON" : "OFF"}
           </text>
-          <text x="0" y="50" textAnchor="middle" className="text-[10px] text-gray-700">
-            {valve2 === 1 ? valve2Desc || "본탱크개방" : "닫힘"}
-          </text>
+        </g>
+
+        {/* 추출 진행 상황 표시 텍스트 상자 */}
+        <g className="text-xs">
+          <rect x="50" y="50" width="300" height="120" rx="5" className="fill-white stroke-gray-300 stroke-1 opacity-80" />
+          <text x="60" y="70" className="font-bold text-sm">추출 진행 상황:</text>
+          
+          {progressMessages.length === 0 ? (
+            <text x="60" y="100" className="text-gray-500">메시지 대기 중...</text>
+          ) : (
+            progressMessages.map((msg, idx) => {
+              // 메시지에서 필요한 정보만 추출 (예: P_1(0/0), C(1/10), 427/215s, 38554s/3900s)
+              const timeStr = new Date(msg.timestamp).toLocaleTimeString();
+              
+              // 정규식 패턴으로 주요 정보 추출
+              const cMatch = msg.message.match(/C\(\d+\/\d+\)/g);
+              
+              // 시간 관련 정보를 더 정확히 추출
+              const shortTimeMatch = msg.message.match(/\d+s\s*\|\s*\d+s/g) || msg.message.match(/\d+\/\d+s/g);
+              const totalTimeMatch = msg.message.match(/\d+s\s*\/\s*\d+s/g);
+              
+              // 추출된 정보로 간결한 형식 구성
+              const cPart = cMatch ? cMatch.join(', ') : '';
+              const shortTimePart = shortTimeMatch ? shortTimeMatch.join(', ') : '';
+              const totalTimePart = totalTimeMatch ? totalTimeMatch.join(', ') : '';
+              
+              // 최종 표시 형식
+              const formattedMsg = `${cPart}, ${shortTimePart}, ${totalTimePart}`.replace(/, ,/g, ',').replace(/,\s+,/g, ',').replace(/,\s*$/,'').replace(/^,\s*/,'');
+              
+              return (
+                <text key={msg.timestamp} x="60" y={100 + idx * 25} className="text-gray-700">
+                  {timeStr} - {formattedMsg}
+                </text>
+              );
+            })
+          )}
         </g>
 
         {/* 범례 */}
@@ -819,155 +752,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           <text x="755" y="843">펌프 OFF</text>
         </g>
       </svg>
-
-      {/* 추출 진행 상황 표시 하단 박스로 이동 */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gray-50 border-t border-gray-200 p-4 text-xs">
-        <div className="flex justify-between">
-          <div className="w-1/2">
-            <div className="font-bold mb-2">추출 진행 상황:</div>
-            {progressMessages.length === 0 ? (
-              <div className="text-gray-500">메시지 대기 중...</div>
-            ) : (
-              <div className="max-h-[100px] overflow-y-auto space-y-2">
-                {progressMessages.map((msg, idx) => {
-                  const timeStr = new Date(msg.timestamp).toLocaleTimeString();
-                  
-                  // 메시지 표시 방식 개선
-                  return (
-                    <div key={msg.timestamp} className="p-2 rounded bg-white border border-gray-100 text-[10px] leading-tight">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">{timeStr}</span>
-                        <span className="text-blue-500 font-semibold text-[8px]">#{idx+1}</span>
-                      </div>
-                      <div className="mt-1 text-[9px] font-mono bg-gray-50 p-1 rounded break-all leading-tight">
-                        {msg.message}
-                      </div>
-                      
-                      {/* JSON 데이터 표시 부분 개선 */}
-                      {msg.rawJson && (
-                        <div className="mt-2 bg-green-50 border border-green-100 rounded p-2 overflow-x-auto">
-                          <div className="font-medium text-green-800 mb-1 text-[9px]">JSON 데이터:</div>
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[8px]">
-                            {msg.rawJson.includes('process_info') && (
-                              <div>
-                                <span className="font-semibold text-green-700">진행:</span>{" "}
-                                {JSON.parse(msg.rawJson).process_info}
-                              </div>
-                            )}
-                            {msg.rawJson.includes('elapsed_time') && (
-                              <div>
-                                <span className="font-semibold text-green-700">경과시간:</span>{" "}
-                                {JSON.parse(msg.rawJson).elapsed_time}
-                              </div>
-                            )}
-                            {msg.rawJson.includes('remaining_time') && (
-                              <div>
-                                <span className="font-semibold text-green-700">남은시간:</span>{" "}
-                                {JSON.parse(msg.rawJson).remaining_time}
-                              </div>
-                            )}
-                            {msg.rawJson.includes('total_remaining') && (
-                              <div>
-                                <span className="font-semibold text-green-700">총 남은시간:</span>{" "}
-                                {JSON.parse(msg.rawJson).total_remaining}
-                              </div>
-                            )}
-                            {msg.rawJson.includes('process_time') && (
-                              <div>
-                                <span className="font-semibold text-green-700">총 시간:</span>{" "}
-                                {JSON.parse(msg.rawJson).process_time}
-                              </div>
-                            )}
-                            {msg.rawJson.includes('status') && (
-                              <div className="col-span-2 mt-1 bg-blue-50 p-1 rounded text-blue-700">
-                                <span className="font-semibold">상태:</span>{" "}
-                                {JSON.parse(msg.rawJson).status}
-                              </div>
-                            )}
-                          </div>
-                          <details className="mt-1">
-                            <summary className="text-[8px] text-green-700 cursor-pointer">원본 JSON 보기</summary>
-                            <pre className="text-[7px] font-mono text-green-800 whitespace-pre-wrap overflow-x-auto mt-1">
-                              {msg.rawJson}
-                            </pre>
-                          </details>
-                        </div>
-                      )}
-                      
-                      {/* 일반 텍스트 메시지 파싱 부분 (JSON이 아닌 경우) */}
-                      {!msg.rawJson && msg.message && (
-                        <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[8px]">
-                          {msg.message.includes('(') && msg.message.includes(')') && (
-                            <div>
-                              <span className="font-semibold">진행:</span>{" "}
-                              {msg.message.match(/\(([^)]+)\)/)?.[1] || ""}
-                            </div>
-                          )}
-                          
-                          {msg.message.includes('|') && (
-                            <div>
-                              <span className="font-semibold">시간:</span>{" "}
-                              {msg.message.match(/(\d+)s\s*\|\s*(\d+)s/)?.[0] || ""}
-                            </div>
-                          )}
-                          
-                          {msg.message.includes('/') && msg.message.includes('s') && (
-                            <div>
-                              <span className="font-semibold">총진행:</span>{" "}
-                              {msg.message.match(/(\d+)s\s*\/\s*(\d+)s/)?.[0] || ""}
-                            </div>
-                          )}
-                          
-                          {msg.message.split(',').length > 3 && (
-                            <div className="col-span-2 bg-blue-50 p-1 rounded text-blue-800">
-                              <span className="font-semibold">상태:</span>{" "}
-                              {msg.message.split(',').slice(3).join(',').trim()}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          
-          <div className="w-1/2 pl-4 border-l border-gray-200">
-            <details className="text-[9px]" open>
-              <summary className="font-bold cursor-pointer mb-2">시스템 상태 정보</summary>
-              <div className="bg-white p-2 rounded border border-gray-100 space-y-1 max-h-[100px] overflow-y-auto">
-                <div>
-                  <span className="font-semibold">밸브 상태:</span> 
-                  3방향 밸브: {valve1 === 1 ? `ON (${valve1Desc || "추출순환"})` : `OFF (${valve1Desc || "전체순환"})`}, 
-                  2방향 밸브: {valve2 === 1 ? `ON (${valve2Desc || "본탱크개방"})` : "OFF (닫힘)"}
-                </div>
-                
-                {tankData.valveStatusMessage && (
-                  <div className="bg-yellow-50 p-1 rounded text-[8px] border border-yellow-100 mt-1 overflow-x-auto whitespace-nowrap">
-                    <span className="font-semibold">밸브 상세:</span> {tankData.valveStatusMessage}
-                  </div>
-                )}
-                
-                <div>
-                  <span className="font-semibold">탱크 상태:</span>
-                </div>
-                <div className="pl-2 space-y-0.5">
-                  <div>본탱크: {getStatusMessage(tankData.mainTank.status, tankData.mainTank.level)}</div>
-                  {tankData.tanks.map((tank, idx) => (
-                    <div key={idx}>
-                      {`탱크 ${tank.id}: ${getStatusMessage(tank.status, tank.level)}, 펌프: ${tank.pumpStatus}`}
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <span className="font-semibold">채움 비율:</span> {fillPercentage}%
-                </div>
-              </div>
-            </details>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

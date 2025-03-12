@@ -26,6 +26,20 @@ import {
   Tank,
   TankSystemData
 } from "@/lib/mqtt-topics"
+import { Switch } from "@/components/ui/switch"
+
+// 카메라 구독 및 명령 토픽 형식
+const CAM_COMMAND_TOPIC = "extwork/cam%d/command";
+const CAM_STATE_TOPIC = "extwork/cam%d/state";
+
+// 카메라 토픽 생성 함수
+const getCamCommandTopic = (camNumber: number): string => {
+  return CAM_COMMAND_TOPIC.replace("%d", camNumber.toString());
+};
+
+const getCamStateTopic = (camNumber: number): string => {
+  return CAM_STATE_TOPIC.replace("%d", camNumber.toString());
+};
 
 export default function Dashboard() {
   const [topic, setTopic] = useState(VALVE_INPUT_TOPIC)
@@ -37,51 +51,112 @@ export default function Dashboard() {
   const [progressStatus, setProgressStatus] = useState<"connected" | "disconnected">("disconnected")
   const [lastErrors, setLastErrors] = useState<string[]>([])
   
+  // 카메라 상태 관리
+  const [camStates, setCamStates] = useState<Array<"ON" | "OFF">>(['OFF', 'OFF', 'OFF', 'OFF', 'OFF']);
+  
   // 추출 진행 메시지를 저장할 상태
-  const [progressMessages, setProgressMessages] = useState<Array<{timestamp: number, message: string}>>([])
+  const [progressMessages, setProgressMessages] = useState<Array<{timestamp: number, message: string, rawJson?: string | null}>>([])
   
   // 기본 탱크 시스템 데이터로 초기화 (6개 탱크)
   const [tankData, setTankData] = useState<TankSystemData>(getDefaultTankSystemData(6))
 
   // MQTT 클라이언트 초기화
   useEffect(() => {
-    const client = new MqttClient()
+    console.log("MQTT 클라이언트 초기화 시작 - 현재 위치:", window.location.href);
+    
+    // MQTT 클라이언트 생성
+    const client = new MqttClient();
 
     client.onConnect = () => {
-      setMqttStatus("연결됨")
+      console.log("MQTT 브로커에 연결 성공!");
+      setMqttStatus("연결됨");
 
       // 모든 토픽 구독 (6개 인버터 기준)
-      const topics = getAllSubscriptionTopics(6)
-      topics.forEach(topic => {
-        client.subscribe(topic)
-      })
+      const topics = getAllSubscriptionTopics(6);
+      console.log("구독할 토픽:", topics);
       
-      console.log("구독한 토픽 목록:", topics)
-    }
+      topics.forEach(topic => {
+        client.subscribe(topic);
+      });
+      
+      // 진행 상황 토픽 명시적 구독
+      client.subscribe(PROCESS_PROGRESS_TOPIC);
+      console.log("진행 상황 토픽 구독:", PROCESS_PROGRESS_TOPIC);
+      
+      // 에러 토픽 구독
+      client.subscribe(ERROR_TOPIC);
+      console.log("에러 토픽 구독:", ERROR_TOPIC);
+      
+      // 카메라 상태 토픽 구독
+      for(let i = 1; i <= 5; i++) {
+        client.subscribe(getCamStateTopic(i));
+      }
+      
+      // 밸브 상태 토픽 명시적 구독
+      client.subscribe(VALVE_STATE_TOPIC);
+      
+      console.log("구독한 토픽 목록:", topics, "및", VALVE_STATE_TOPIC, PROCESS_PROGRESS_TOPIC, ERROR_TOPIC);
+    };
 
     client.onDisconnect = () => {
-      setMqttStatus("연결 끊김")
-      setProgressStatus("disconnected")
-    }
+      console.log("MQTT 브로커와 연결이 끊겼습니다.");
+      setMqttStatus("연결 끊김");
+      setProgressStatus("disconnected");
+      
+      // 5초 후 자동 재연결 시도
+      setTimeout(() => {
+        console.log("MQTT 자동 재연결 시도...");
+        if (!client.isConnected()) {
+          client.connect();
+        }
+      }, 5000);
+    };
+
+    client.onError = (error) => {
+      console.error("MQTT 오류 발생:", error);
+      // 오류 메시지 표시
+      setLastErrors(prev => {
+        const newErrors = [`MQTT 오류: ${error.message}`, ...prev].slice(0, 5);
+        return newErrors;
+      });
+    };
 
     client.onMessage = (topic: string, message: string) => {
-      handleMqttMessage(topic, message)
-    }
+      console.log(`MQTT 메시지 수신: ${topic}`);
+      handleMqttMessage(topic, message);
+    };
 
-    setMqttClient(client)
+    setMqttClient(client);
     
     // 자동으로 연결 시작
-    client.connect()
+    console.log("MQTT 브로커에 연결 시도...");
+    client.connect();
 
-    // 언마운트 시 정리
+    // 컴포넌트 언마운트 시 연결 종료
     return () => {
-      client.disconnect()
-    }
-  }, [])
+      console.log("Dashboard 컴포넌트 언마운트, MQTT 연결 종료");
+      client.disconnect();
+    };
+  }, []);
 
   // MQTT 메시지 처리
   const handleMqttMessage = (topic: string, message: string) => {
     console.log(`메시지 수신: ${topic} - ${message}`)
+
+    // 카메라 상태 토픽 처리
+    const camStateMatch = topic.match(/extwork\/cam(\d+)\/state/)
+    if (camStateMatch) {
+      const camNumber = parseInt(camStateMatch[1])
+      if (camNumber >= 1 && camNumber <= 5) {
+        const camStatus: "ON" | "OFF" = message === "1" ? "ON" : "OFF"
+        setCamStates(prev => {
+          const newStates = [...prev]
+          newStates[camNumber - 1] = camStatus
+          return newStates
+        })
+        return
+      }
+    }
 
     // 펌프 상태 토픽 처리
     const pumpStateMatch = topic.match(/extwork\/inverter(\d+)\/state/)
@@ -165,29 +240,142 @@ export default function Dashboard() {
 
     // 밸브 상태 토픽 처리
     if (topic === VALVE_STATE_TOPIC || topic === VALVE_INPUT_TOPIC) {
+      console.log(`밸브 상태 메시지 수신: ${topic} - ${message}`);
+      
       // 1000, 0100, 0000 형식의 메시지를 처리
-      const { valveState } = parseValveStateMessage(message)
-      if (valveState) {
-        setTankData((prev) => ({ ...prev, valveState }))
+      if (message.match(/^[0-1]{4}$/)) {
+        // 4자리 0과 1로 구성된 문자열인 경우 (valve 명령어)
+        const { valveState, valveADesc, valveBDesc } = parseValveStateMessage(message);
+        if (valveState) {
+          console.log(`밸브 상태 코드 업데이트: ${valveState}, 설명 A: ${valveADesc}, 설명 B: ${valveBDesc}`);
+          setTankData((prev) => ({ 
+            ...prev, 
+            valveState,
+            valveADesc: valveADesc || '',
+            valveBDesc: valveBDesc || ''
+          }));
+        }
+      } else if (message.includes('valveA=') || message.includes('valveB=')) {
+        // 상세 밸브 상태 메시지인 경우 (valve 상태 정보)
+        // 예: "밸브 상태: valveA=ON(추출순환), valveB=OFF(닫힘), valveC=OFF(-), valveD=OFF(-)"
+        const valveStatusMessage = message;
+        console.log(`밸브 상태 메시지 업데이트: ${valveStatusMessage}`);
+        
+        // 밸브 상태 문자열에서 ON/OFF 파싱 및 설명 추출
+        const valveAState = message.includes('valveA=ON') ? '1' : '0';
+        const valveBState = message.includes('valveB=ON') ? '1' : '0';
+        const valveCState = message.includes('valveC=ON') ? '1' : '0';
+        const valveDState = message.includes('valveD=ON') ? '1' : '0';
+        
+        // 설명 추출 (괄호 안의 내용)
+        let valveADesc = '';
+        let valveBDesc = '';
+        
+        const valveAMatch = message.match(/valveA=[A-Z]+([\(\[][^\)\]]+[\)\]])/i);
+        if (valveAMatch && valveAMatch[1]) {
+          valveADesc = valveAMatch[1].replace(/[\(\)\[\]]/g, '');
+        }
+        
+        const valveBMatch = message.match(/valveB=[A-Z]+([\(\[][^\)\]]+[\)\]])/i);
+        if (valveBMatch && valveBMatch[1]) {
+          valveBDesc = valveBMatch[1].replace(/[\(\)\[\]]/g, '');
+        }
+        
+        // 밸브 상태 문자열 업데이트
+        const newValveState = valveAState + valveBState + valveCState + valveDState;
+        console.log(`밸브 상태 업데이트 결과: 코드=${newValveState}, valveA 설명=${valveADesc}, valveB 설명=${valveBDesc}`);
+        
+        // 상태 업데이트
+        setTankData((prev) => ({ 
+          ...prev, 
+          valveState: newValveState,
+          valveStatusMessage,
+          valveADesc,
+          valveBDesc
+        }));
       }
-      return
+      return;
     }
     
     // 공정 진행 상황 토픽 처리
     if (topic === PROCESS_PROGRESS_TOPIC) {
-      setProgressData(message)
-      setProgressStatus("connected")
+      // 메시지 내용을 로깅하여 디버깅
+      console.log('추출 진행 메시지 수신:', message);
       
-      // 추출 진행 메시지 추가
+      setProgressData(message);
+      setProgressStatus("connected");
+      
+      // JSON 메시지인지 확인하고 파싱
+      let parsedMessage = message;
+      let jsonData = null;
+      let rawJsonStr = null;
+      
+      try {
+        // 메시지가 JSON 형식인 경우 파싱
+        if (message.trim().startsWith('{') && message.trim().endsWith('}')) {
+          console.log('JSON 형식 메시지 감지, 파싱 시도');
+          jsonData = JSON.parse(message);
+          console.log('JSON 파싱 성공:', jsonData);
+          
+          // 원본 JSON을 문자열로 예쁘게 포맷팅하여 저장
+          rawJsonStr = JSON.stringify(jsonData, null, 2);
+          
+          // JSON 데이터를 가독성 있는 텍스트로 변환 (모든 필드 포함)
+          parsedMessage = `[JSON] `;
+          
+          // 기본 필드들 추가 (null 체크 추가)
+          if (jsonData.process_info) parsedMessage += `진행: ${jsonData.process_info}, `;
+          if (jsonData.elapsed_time !== undefined) parsedMessage += `경과: ${jsonData.elapsed_time}s, `;
+          if (jsonData.remaining_time !== undefined) parsedMessage += `남은: ${jsonData.remaining_time}s, `;
+          if (jsonData.total_remaining !== undefined) parsedMessage += `전체남은: ${jsonData.total_remaining}s, `;
+          if (jsonData.process_time !== undefined) parsedMessage += `총시간: ${jsonData.process_time}s, `;
+          if (jsonData.pump_id) parsedMessage += `펌프: ${jsonData.pump_id}, `;
+          
+          // 추가 필드가 있으면 포함
+          if (jsonData.current_stage) parsedMessage += `단계: ${jsonData.current_stage}, `;
+          if (jsonData.status) parsedMessage += `상태: ${jsonData.status}, `;
+          
+          // 추가 정보 필드가 있으면 포함
+          if (jsonData.additional_info) parsedMessage += `추가정보: ${jsonData.additional_info}, `;
+          
+          // 마지막 쉼표와 공백 제거
+          parsedMessage = parsedMessage.replace(/,\s*$/, '');
+          
+          // 추가 디버깅 로그
+          console.log('변환된 메시지:', parsedMessage);
+          console.log('원본 JSON 문자열 길이:', rawJsonStr?.length);
+        } else {
+          console.log('일반 텍스트 메시지 감지 (JSON 아님)');
+        }
+      } catch (e) {
+        console.error('JSON 파싱 실패:', e);
+        // 파싱 실패 시 원본 메시지 사용
+        parsedMessage = `[파싱실패] ${message}`;
+      }
+      
+      // 추출 진행 메시지 추가 - 최신 5개 메시지 표시
       setProgressMessages(prev => {
+        // 새 메시지 생성
+        const newMessage = { 
+          timestamp: Date.now(), 
+          message: parsedMessage, 
+          rawJson: rawJsonStr 
+        };
+        
+        console.log("추가될 메시지:", newMessage.message.substring(0, 50) + (newMessage.message.length > 50 ? '...' : ''));
+        
+        // 새 메시지를 맨 앞에 추가하고 최신 5개 유지
         const newMessages = [
-          { timestamp: Date.now(), message },
+          newMessage,
           ...prev
-        ].slice(0, 2) // 최신 2개만 유지
-        return newMessages
-      })
+        ].slice(0, 5); 
+        
+        console.log("업데이트된 메시지 목록 개수:", newMessages.length);
+        return newMessages;
+      });
       
-      return
+      console.log("추출 진행 메시지 업데이트 완료");
+      return;
     }
     
     // 오류 토픽 처리
@@ -198,6 +386,28 @@ export default function Dashboard() {
       })
       return
     }
+  }
+
+  // 카메라 상태 변경 함수
+  const toggleCamera = (camNumber: number) => {
+    if (!mqttClient) return
+    
+    // 현재 상태 확인 (인덱스는 0부터 시작하므로 camNumber - 1)
+    const currentState = camStates[camNumber - 1]
+    // 토글할 새 상태
+    const newState = currentState === "ON" ? "OFF" : "ON"
+    // 메시지 값 (ON -> 1, OFF -> 0)
+    const messageValue = newState === "ON" ? "1" : "0"
+    
+    // 메시지 발행
+    mqttClient.publish(getCamCommandTopic(camNumber), messageValue)
+    
+    // UI에 즉시 반영 (실제 상태는 구독한 state 토픽으로부터 업데이트될 것임)
+    setCamStates(prev => {
+      const newStates = [...prev]
+      newStates[camNumber - 1] = newState
+      return newStates
+    })
   }
 
   // 밸브 상태 변경
@@ -254,11 +464,55 @@ export default function Dashboard() {
     setSearchTopic("")
   }
 
+  // 밸브 상태 파싱 함수
+  const parseValveStateMessage = (message: string) => {
+    console.log(`밸브 상태 메시지 파싱 시작: ${message}`);
+    
+    // 0100 형식의 메시지 처리 (밸브 상태 코드)
+    if (message.match(/^[0-1]{4}$/)) {
+      // 4자리 0과 1 코드인 경우
+      console.log(`밸브 상태 코드 감지: ${message}`);
+      
+      // 특수 케이스: 0100 (3웨이 밸브 OFF, 2웨이 밸브 ON)
+      if (message === '0100') {
+        console.log('특수 케이스 0100 감지: 3웨이 밸브 OFF, 2웨이 밸브 ON');
+        return {
+          valveState: '0100',
+          valveAState: '0', // 3웨이 밸브 OFF
+          valveBState: '1', // 2웨이 밸브 ON
+          valveADesc: '전체순환_교환',
+          valveBDesc: '열림'
+        };
+      }
+      
+      // 다른 케이스들 (1000, 0000 등)
+      const valveAState = message[0];
+      const valveBState = message[1];
+      const valveCState = message[2];
+      const valveDState = message[3];
+      
+      console.log(`밸브 상태 파싱 결과: A=${valveAState}, B=${valveBState}, C=${valveCState}, D=${valveDState}`);
+      
+      return {
+        valveState: message,
+        valveAState,
+        valveBState,
+        valveCState,
+        valveDState,
+        valveADesc: valveAState === '1' ? '추출순환' : '전체순환',
+        valveBDesc: valveBState === '1' ? '열림' : '닫힘'
+      };
+    }
+    
+    return { valveState: message };
+  }
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="tanks">
         <TabsList className="mb-4">
           <TabsTrigger value="tanks">탱크 시스템</TabsTrigger>
+          <TabsTrigger value="cameras">카메라</TabsTrigger>
           <TabsTrigger value="mqtt">MQTT 제어</TabsTrigger>
         </TabsList>
 
@@ -289,6 +543,49 @@ export default function Dashboard() {
                 onValveChange={changeValveState}
                 progressMessages={progressMessages}
               />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cameras" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>카메라 제어</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                {Array.from({ length: 5 }, (_, i) => i + 1).map((camNumber) => (
+                  <Card key={`cam-${camNumber}`}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">카메라 {camNumber}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex items-center space-x-2 text-sm">
+                          <span>OFF</span>
+                          <Switch 
+                            id={`cam-switch-${camNumber}`}
+                            checked={camStates[camNumber - 1] === 'ON'}
+                            onCheckedChange={() => toggleCamera(camNumber)}
+                          />
+                          <span>ON</span>
+                        </div>
+                        <Badge 
+                          variant={camStates[camNumber - 1] === 'ON' ? "default" : "secondary"}
+                          className="mt-2"
+                        >
+                          {camStates[camNumber - 1]}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
