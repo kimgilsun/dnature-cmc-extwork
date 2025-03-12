@@ -953,7 +953,7 @@ export default function TankSystem({
                 {tank.pumpStatus}
               </text>
               
-              {/* K 스위치 위치 조정 - 우측 상단에 고정 */}
+              {/* K 스위치 위치 조정 - 우측 상단에 고정 (소문자 k 발행) */}
               <g 
                 className="cursor-pointer"
                 onClick={() => onPumpKCommand && onPumpKCommand(1)}
@@ -970,7 +970,7 @@ export default function TankSystem({
                   textAnchor="middle"
                   className="text-blue-600 font-bold text-sm"
                 >
-                  K
+                  k
                 </text>
               </g>
               

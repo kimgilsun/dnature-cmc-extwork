@@ -486,11 +486,11 @@ export default function Dashboard() {
   const sendPumpKCommand = (pumpId: number) => {
     if (!mqttClient) return;
     
-    console.log(`펌프 ${pumpId}에 K 명령 발행`);
+    console.log(`펌프 ${pumpId}에 k 명령 발행`);
     
-    // K 명령 발행
+    // k 명령 발행 (소문자로 변경)
     const topic = getPumpCommandTopic(pumpId);
-    mqttClient.publish(topic, "K");
+    mqttClient.publish(topic, "k");
   };
 
   // MQTT 브로커에 연결
