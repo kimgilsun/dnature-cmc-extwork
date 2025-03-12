@@ -56,37 +56,69 @@ const saveSystemState = async (state: any) => {
 
 // IndexedDB에 상태 저장
 const saveToIndexedDB = (state: any) => {
-  if (typeof window === 'undefined' || !window.indexedDB) return;
-  
-  try {
-    const request = window.indexedDB.open('TankSystemDB', 1);
+  return new Promise<void>((resolve, reject) => {
+    // IndexedDB 지원 여부 확인
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      console.log('이 브라우저는 IndexedDB를 지원하지 않습니다.');
+      return resolve(); // 오류로 처리하지 않고 조용히 종료
+    }
     
-    request.onupgradeneeded = function(event) {
-      const db = request.result;
-      if (!db.objectStoreNames.contains('systemState')) {
-        db.createObjectStore('systemState', { keyPath: 'id' });
-      }
-    };
-    
-    request.onsuccess = function(event) {
-      const db = request.result;
-      const transaction = db.transaction(['systemState'], 'readwrite');
-      const store = transaction.objectStore('systemState');
+    try {
+      const request = window.indexedDB.open('TankSystemDB', 1);
       
-      // 항상 같은 키로 저장하여 최신 상태만 유지
-      store.put({
-        id: 'currentState',
-        data: state,
-        timestamp: Date.now()
-      });
-    };
-    
-    request.onerror = function(event) {
-      console.error('IndexedDB 저장 오류:', event);
-    };
-  } catch (error) {
-    console.error('IndexedDB 접근 오류:', error);
-  }
+      request.onupgradeneeded = function(event) {
+        try {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('systemState')) {
+            db.createObjectStore('systemState', { keyPath: 'id' });
+          }
+        } catch (error) {
+          console.error('IndexedDB 스키마 업그레이드 중 오류:', error);
+        }
+      };
+      
+      request.onsuccess = function(event) {
+        try {
+          const db = request.result;
+          const transaction = db.transaction(['systemState'], 'readwrite');
+          const store = transaction.objectStore('systemState');
+          
+          // 항상 동일한 키를 사용하여 항상 최신 상태만 유지
+          const stateToSave = {
+            id: 'currentState',
+            data: state,
+            timestamp: Date.now()
+          };
+          
+          const putRequest = store.put(stateToSave);
+          
+          putRequest.onsuccess = function() {
+            resolve();
+          };
+          
+          putRequest.onerror = function(event) {
+            console.warn('IndexedDB 저장 오류 (무시됨):', event);
+            resolve(); // 오류를 무시하고 계속 진행
+          };
+          
+          transaction.oncomplete = function() {
+            db.close();
+          };
+        } catch (error) {
+          console.warn('IndexedDB 트랜잭션 오류 (무시됨):', error);
+          resolve(); // 오류를 무시하고 계속 진행
+        }
+      };
+      
+      request.onerror = function(event) {
+        console.warn('IndexedDB 접근 오류 (무시됨):', event);
+        resolve(); // 오류를 무시하고 계속 진행
+      };
+    } catch (error) {
+      console.warn('IndexedDB 처리 중 예외 (무시됨):', error);
+      resolve(); // 오류를 무시하고 계속 진행
+    }
+  });
 };
 
 // 상태 불러오기 함수 개선
@@ -166,45 +198,62 @@ const loadInitialState = async (): Promise<any> => {
 // IndexedDB에서 상태 불러오기 (Promise 반환)
 const loadFromIndexedDB = (): Promise<any> => {
   return new Promise((resolve, reject) => {
+    // IndexedDB 지원 여부 확인
     if (typeof window === 'undefined' || !window.indexedDB) {
-      reject('IndexedDB 사용 불가');
-      return;
+      console.log('이 브라우저는 IndexedDB를 지원하지 않습니다.');
+      return resolve(null); // 오류로 처리하지 않고 null 반환
     }
     
     try {
       const request = window.indexedDB.open('TankSystemDB', 1);
       
       request.onupgradeneeded = function(event) {
-        const db = request.result;
-        if (!db.objectStoreNames.contains('systemState')) {
-          db.createObjectStore('systemState', { keyPath: 'id' });
+        try {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('systemState')) {
+            db.createObjectStore('systemState', { keyPath: 'id' });
+          }
+        } catch (error) {
+          console.error('IndexedDB 스키마 업그레이드 중 오류:', error);
         }
       };
       
       request.onsuccess = function(event) {
-        const db = request.result;
-        const transaction = db.transaction(['systemState'], 'readonly');
-        const store = transaction.objectStore('systemState');
-        const getRequest = store.get('currentState');
-        
-        getRequest.onsuccess = function() {
-          if (getRequest.result) {
-            resolve(getRequest.result.data);
-          } else {
-            resolve(null);
-          }
-        };
-        
-        getRequest.onerror = function(event) {
-          reject('IndexedDB 읽기 오류');
-        };
+        try {
+          const db = request.result;
+          const transaction = db.transaction(['systemState'], 'readonly');
+          const store = transaction.objectStore('systemState');
+          const getRequest = store.get('currentState');
+          
+          getRequest.onsuccess = function() {
+            if (getRequest.result) {
+              resolve(getRequest.result.data);
+            } else {
+              resolve(null);
+            }
+          };
+          
+          getRequest.onerror = function(event) {
+            console.warn('IndexedDB 읽기 오류 (무시됨):', event);
+            resolve(null); // 오류를 무시하고 null 반환
+          };
+          
+          transaction.oncomplete = function() {
+            db.close();
+          };
+        } catch (error) {
+          console.warn('IndexedDB 트랜잭션 오류 (무시됨):', error);
+          resolve(null); // 오류를 무시하고 null 반환
+        }
       };
       
       request.onerror = function(event) {
-        reject('IndexedDB 접근 오류');
+        console.warn('IndexedDB 접근 오류 (무시됨):', event);
+        resolve(null); // 오류를 무시하고 null 반환
       };
     } catch (error) {
-      reject(error);
+      console.warn('IndexedDB 처리 중 예외 (무시됨):', error);
+      resolve(null); // 오류를 무시하고 null 반환
     }
   });
 };
