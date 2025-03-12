@@ -633,6 +633,27 @@ export default function Dashboard() {
     mqttClient.publish(topic, "k");
   };
 
+  // 추출 명령 발행 함수 추가
+  const sendExtractionCommand = (command: string) => {
+    if (!mqttClient) return;
+    
+    console.log(`추출 명령 발행: ${command}`);
+    
+    // 추출 명령 발행 (extwork/extraction/input 토픽으로)
+    const topic = "extwork/extraction/input";
+    mqttClient.publish(topic, command);
+    
+    // 로그 메시지 추가
+    setProgressMessages(prev => {
+      const newMessage = {
+        timestamp: Date.now(),
+        message: `추출 명령 발행: ${command}`,
+        rawJson: null
+      };
+      return [newMessage, ...prev].slice(0, 10);
+    });
+  };
+
   // MQTT 브로커에 연결
   const connectMqtt = () => {
     if (mqttClient) {
@@ -738,6 +759,8 @@ export default function Dashboard() {
                 onPumpReset={resetPump}
                 onPumpKCommand={sendPumpKCommand}
                 pumpStateMessages={pumpStateMessages}
+                mqttClient={mqttClient}
+                onExtractionCommand={sendExtractionCommand}
               />
             </CardContent>
           </Card>
