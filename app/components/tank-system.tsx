@@ -197,14 +197,14 @@ export default function TankSystem({
     console.log('현재 밸브 상태 문자열:', tankData.valveState);
     console.log('밸브 설명:', tankData.valveADesc, tankData.valveBDesc);
     
-    // 특수 케이스: 0100 (3웨이 밸브 OFF, 2웨이 밸브 ON)
+    // 특수 케이스: 0100 (밸브2 OFF, 밸브1 ON)
     if (tankData.valveState === '0100') {
-      console.log('특수 케이스 감지: 0100 - 3웨이 밸브 OFF, 2웨이 밸브 ON');
+      console.log('특수 케이스 감지: 0100 - 밸브2 OFF, 밸브1 ON');
       return {
-        valve1: 0, // 3웨이 밸브 OFF
-        valve2: 1, // 2웨이 밸브 ON
-        valve1Desc: tankData.valveADesc || '전체순환_교환',
-        valve2Desc: tankData.valveBDesc || '열림'
+        valve1: 0, // 밸브2 OFF (3way)
+        valve2: 1, // 밸브1 ON (2way)
+        valve1Desc: tankData.valveADesc || '전체순환',
+        valve2Desc: tankData.valveBDesc || 'ON'
       };
     }
     
@@ -241,7 +241,7 @@ export default function TankSystem({
       valve1: v1,
       valve2: v2,
       valve1Desc: v1 === 1 ? '추출순환' : '전체순환',
-      valve2Desc: v2 === 1 ? '열림' : '닫힘'
+      valve2Desc: v2 === 1 ? 'ON' : 'OFF'
     };
   };
 
@@ -379,31 +379,30 @@ export default function TankSystem({
     return `M ${from.x} ${from.y} L ${to.x} ${to.y}`
   }
 
-  // 6번 탱크에서 3way 밸브로의 경로 (직선 연결)
+  // 6번 탱크에서 3way 밸브로의 경로 - 우측으로 짧게 뽑고 연결
   const calculate6ToValvePath = () => {
-    // 6번 탱크에서 수직으로 내려오다가 3way 밸브로 수평 연결
-    const startX = tankPositions[5].x;
-    const startY = tankPositions[5].y + tankHeight / 2;
-    const midY = (startY + valve3wayPosition.y) / 2;
+    // 6번 탱크에서 우측으로 짧게 나온 후 3way 밸브로 연결
+    const startX = tankPositions[5].x + tankWidth / 2;
+    const startY = tankPositions[5].y;
     
     return `M ${startX} ${startY} 
-            V ${midY} 
+            H ${startX + 20} 
             L ${valve3wayPosition.x} ${valve3wayPosition.y}`;
   }
 
-  // 3way 밸브에서 본탱크로의 경로 (직선 연결)
+  // 3way 밸브에서 본탱크로의 경로 (직선 연결) 수정
   const calculate3wayToMainPath = () => {
-    // 3way 밸브에서 본탱크 왼쪽 가장자리까지 직선 연결
+    // 3way 밸브에서 본탱크 왼쪽 가장자리까지 직선 연결 - 더 짧게 조정
     const tankLeft = mainTankPosition.x - mainTankPosition.width / 2
     const tankMid = mainTankPosition.y
-    return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${tankLeft} ${tankMid}`
+    return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${tankLeft + 20} ${tankMid}`
   }
 
-  // 본탱크에서 2way 밸브로의 경로 (직각으로 조정)
+  // 본탱크에서 2way 밸브로의 경로 (직각으로 조정) - 더 짧게 수정
   const calculateMainToTank1Path = () => {
-    // 본탱크 위쪽 가장자리에서 시작하여 2way 밸브까지 수직 연결
+    // 본탱크 위쪽 가장자리에서 시작하여 2way 밸브까지 수직 연결 - 더 짧게
     const tankEdgeY = mainTankPosition.y - mainTankPosition.height / 2
-    return `M ${mainTankPosition.x} ${tankEdgeY} V ${valve2Position.y}`
+    return `M ${mainTankPosition.x} ${tankEdgeY} V ${valve2Position.y + 20}`
   }
 
   // 2way 밸브에서 펌프1 입구 쪽으로의 경로
@@ -782,15 +781,8 @@ export default function TankSystem({
           const tankNum = index + 1
           const tank = tankData.tanks[index]
           
-          // 1번 탱크인 경우 텍스트 박스의 위치를 조정
-          const textBoxY = tankNum === 1 
-            ? pos.y + tankHeight / 2 + 5
-            : pos.y + tankHeight / 2 + 5;
-          
-          // 4번 탱크인 경우 텍스트 박스 위치를 더 많이 조정
-          const adjustedTextBoxY = tankNum === 4
-            ? pos.y + tankHeight / 2 + 35 // 더 아래로 조정
-            : textBoxY;
+          // 모든 탱크 텍스트 박스 위치 조정
+          const textBoxY = pos.y + tankHeight / 2 + 5;
           
           // 1번 탱크 텍스트 박스 너비 조정
           const textBoxWidth = tankNum === 1 ? 120 : tankWidth;
@@ -822,11 +814,11 @@ export default function TankSystem({
                 {pos.label}
               </text>
               
-              {/* 탱크 상태 메시지 텍스트 박스 - 1번과 4번 탱크 위치 조정 */}
+              {/* 탱크 상태 메시지 텍스트 박스 - 모든 탱크 동일하게 위치 조정 */}
               <g>
                 <rect
                   x={tankNum === 1 ? pos.x - textBoxWidth / 2 : pos.x - tankWidth / 2}
-                  y={adjustedTextBoxY}
+                  y={textBoxY}
                   width={textBoxWidth}
                   height={20}
                   rx="3"
@@ -834,7 +826,7 @@ export default function TankSystem({
                 />
                 <text
                   x={pos.x}
-                  y={adjustedTextBoxY + 13}
+                  y={textBoxY + 13}
                   textAnchor="middle"
                   className="text-[9px] fill-gray-700"
                 >
@@ -875,21 +867,18 @@ export default function TankSystem({
             className={`${valve1 === 1 ? "fill-green-500" : "fill-red-500"} stroke-gray-400 stroke-1 transition-all duration-300`} 
           />
           
-          {/* 밸브 텍스트 */}
+          {/* 밸브 텍스트 변경 */}
           <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
-            3way 밸브
+            밸브2
           </text>
           <text x="0" y={valve1 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
-            {valve1 === 1 ? "ON" : "OFF"}
-          </text>
-          <text x="0" y="30" textAnchor="middle" className="text-[10px] text-gray-700">
-            {valve1 === 1 ? valve1Desc || "추출순환" : "전체순환"}
+            {valve1 === 1 ? "추출순환" : "전체순환"}
           </text>
         </g>
 
-        {/* 2way 밸브 */}
+        {/* 2way 밸브 이름과 표시 변경 */}
         <g transform={`translate(${valve2Position.x}, ${valve2Position.y})`}>
-          {/* 밸브 배경 - 높이를 줄임 */}
+          {/* 밸브 배경 */}
           <rect 
             x="-30" 
             y="-30" 
@@ -913,15 +902,12 @@ export default function TankSystem({
             className={`${valve2 === 1 ? "fill-green-500" : "fill-red-500"} stroke-gray-400 stroke-1 transition-all duration-300`} 
           />
           
-          {/* 밸브 텍스트 */}
+          {/* 밸브 텍스트 변경 */}
           <text x="0" y="-20" textAnchor="middle" className="text-xs font-bold">
-            2way 밸브
+            밸브1
           </text>
           <text x="0" y={valve2 === 1 ? "-10" : "10"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve2 === 1 ? "ON" : "OFF"}
-          </text>
-          <text x="0" y="30" textAnchor="middle" className="text-[10px] text-gray-700">
-            {valve2 === 1 ? valve2Desc || "본탱크개방" : "닫힘"}
           </text>
         </g>
 
