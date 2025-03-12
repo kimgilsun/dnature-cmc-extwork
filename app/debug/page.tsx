@@ -13,6 +13,7 @@ export default function DebugPage() {
   const [mqttClient, setMqttClient] = useState<any>(null);
   const [brokerInfo, setBrokerInfo] = useState<string>("");
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // 로그 함수
   const addLog = (log: string) => {
@@ -38,56 +39,67 @@ export default function DebugPage() {
       addLog(`브라우저 정보 수집 실패: ${err}`);
     }
 
-    // 1초 후에 MQTT 클라이언트 초기화
+    // 1.5초 후에 MQTT 클라이언트 초기화 (페이지 로딩 완료 후)
     const timer = setTimeout(() => {
+      setIsLoading(true);
+      
       // 동적으로 MQTT 클라이언트 모듈 로드
-      import('@/lib/mqtt-client').then(module => {
-        const MqttClient = module.default;
-        
-        try {
-          addLog("MQTT 클라이언트 초기화 시작");
+      try {
+        import('@/lib/mqtt-client').then(module => {
+          const createMqttClient = module.default;
           
-          const client = new MqttClient({
-            onConnect: () => {
-              addLog("MQTT 브로커에 연결됨!");
-              setStatus("연결됨");
-              setIsConnected(true);
-  
-              // 테스트 토픽 구독
-              client.subscribe("extwork/valve/state");
-              client.subscribe("extwork/extraction/progress");
-              addLog("토픽 구독 완료: extwork/valve/state, extwork/extraction/progress");
-            },
-            onDisconnect: () => {
-              addLog("MQTT 브로커와 연결 끊김");
-              setStatus("연결 끊김");
-              setIsConnected(false);
-            },
-            onError: (error: Error) => {
-              const errorMessage = `MQTT 오류: ${error.message}`;
-              addLog(errorMessage);
-              setErrors(prev => [errorMessage, ...prev].slice(0, 10));
-            },
-            onMessage: (topic: string, message: string) => {
-              addLog(`메시지 수신: ${topic}`);
-              setMessages(prev => [
-                { topic, message, timestamp: Date.now() },
-                ...prev
-              ].slice(0, 10));
-            }
-          });
-  
-          setMqttClient(client);
-          addLog("MQTT 클라이언트 초기화 완료");
-        } catch (err) {
-          addLog(`MQTT 클라이언트 초기화 실패: ${err}`);
-          setErrors(prev => [`초기화 오류: ${err}`, ...prev]);
-        }
-      }).catch(err => {
-        addLog(`MQTT 모듈 로드 실패: ${err}`);
-        setErrors(prev => [`모듈 로드 오류: ${err}`, ...prev]);
-      });
-    }, 1000);
+          try {
+            addLog("MQTT 클라이언트 초기화 시작");
+            
+            const client = createMqttClient({
+              onConnect: () => {
+                addLog("MQTT 브로커에 연결됨!");
+                setStatus("연결됨");
+                setIsConnected(true);
+    
+                // 테스트 토픽 구독
+                client.subscribe("extwork/valve/state");
+                client.subscribe("extwork/extraction/progress");
+                addLog("토픽 구독 완료: extwork/valve/state, extwork/extraction/progress");
+              },
+              onDisconnect: () => {
+                addLog("MQTT 브로커와 연결 끊김");
+                setStatus("연결 끊김");
+                setIsConnected(false);
+              },
+              onError: (error: Error) => {
+                const errorMessage = `MQTT 오류: ${error.message}`;
+                addLog(errorMessage);
+                setErrors(prev => [errorMessage, ...prev].slice(0, 10));
+              },
+              onMessage: (topic: string, message: string) => {
+                addLog(`메시지 수신: ${topic}`);
+                setMessages(prev => [
+                  { topic, message, timestamp: Date.now() },
+                  ...prev
+                ].slice(0, 10));
+              }
+            });
+    
+            setMqttClient(client);
+            addLog("MQTT 클라이언트 초기화 완료");
+          } catch (err) {
+            addLog(`MQTT 클라이언트 초기화 실패: ${err}`);
+            setErrors(prev => [`초기화 오류: ${err}`, ...prev]);
+          } finally {
+            setIsLoading(false);
+          }
+        }).catch(err => {
+          addLog(`MQTT 모듈 로드 실패: ${err}`);
+          setErrors(prev => [`모듈 로드 오류: ${err}`, ...prev]);
+          setIsLoading(false);
+        });
+      } catch (error) {
+        addLog(`최상위 오류 발생: ${error}`);
+        setErrors(prev => [`최상위 오류: ${error}`, ...prev]);
+        setIsLoading(false);
+      }
+    }, 1500);
     
     return () => {
       clearTimeout(timer);
@@ -110,7 +122,12 @@ export default function DebugPage() {
     }
 
     addLog("MQTT 브로커 연결 시도");
-    mqttClient.connect();
+    try {
+      mqttClient.connect();
+    } catch (e) {
+      addLog(`연결 시도 중 오류: ${e}`);
+      setErrors(prev => [`연결 오류: ${e}`, ...prev]);
+    }
   };
 
   // 연결 해제 버튼 핸들러
@@ -118,7 +135,11 @@ export default function DebugPage() {
     if (!mqttClient) return;
     
     addLog("MQTT 브로커 연결 해제");
-    mqttClient.disconnect();
+    try {
+      mqttClient.disconnect();
+    } catch (e) {
+      addLog(`연결 해제 중 오류: ${e}`);
+    }
   };
 
   // 테스트 메시지 발행 핸들러
@@ -134,7 +155,11 @@ export default function DebugPage() {
     });
     
     addLog("테스트 메시지 발행");
-    mqttClient.publish("extwork/extraction/progress", testMsg);
+    try {
+      mqttClient.publish("extwork/extraction/progress", testMsg);
+    } catch (e) {
+      addLog(`메시지 발행 중 오류: ${e}`);
+    }
   };
 
   return (
@@ -147,7 +172,7 @@ export default function DebugPage() {
             <CardTitle className="flex justify-between items-center">
               <span>연결 상태</span>
               <Badge variant={isConnected ? "default" : "destructive"}>
-                {status}
+                {isLoading ? "로딩 중..." : status}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -158,13 +183,13 @@ export default function DebugPage() {
               </div>
               
               <div className="flex space-x-2">
-                <Button onClick={handleConnect} variant="default" disabled={isConnected}>
+                <Button onClick={handleConnect} variant="default" disabled={isConnected || isLoading}>
                   연결
                 </Button>
-                <Button onClick={handleDisconnect} variant="outline" disabled={!isConnected}>
+                <Button onClick={handleDisconnect} variant="outline" disabled={!isConnected || isLoading}>
                   연결 해제
                 </Button>
-                <Button onClick={handlePublishTest} variant="secondary" disabled={!isConnected}>
+                <Button onClick={handlePublishTest} variant="secondary" disabled={!isConnected || isLoading}>
                   테스트 메시지 발행
                 </Button>
               </div>
