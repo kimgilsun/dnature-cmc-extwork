@@ -938,21 +938,10 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
-      {/* 펌프 상태 버튼 추가 */}
-      <div className="flex justify-end space-x-2 mb-2 p-2">
-        {Array(6).fill(0).map((_, i) => {
-          const pumpId = i + 1;
-          const isOn = tankData.tanks[i]?.pumpStatus === "ON";
-          return (
-            <button 
-              key={`pump-btn-${pumpId}`}
-              className={`px-3 py-1 rounded text-xs font-bold ${isOn ? 'bg-black text-white' : 'bg-gray-100'}`}
-              onClick={() => onPumpToggle && onPumpToggle(pumpId)}
-            >
-              펌프 {pumpId}: {isOn ? 'ON' : 'OFF'}
-            </button>
-          );
-        })}
+      {/* 연결 상태 표시 동그라미 추가 */}
+      <div className="absolute top-2 right-2 flex items-center space-x-2">
+        <div className={`w-4 h-4 rounded-full ${connectionStatus.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+        <span className="text-xs font-medium">{connectionStatus.connected ? '연결됨' : '연결 안됨'}</span>
       </div>
       
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
