@@ -625,7 +625,7 @@ export default function TankSystem({
         {/* 3way 밸브(밸브2)에서 펌프 1로의 경로 - 거의 펌프에 닿도록 연장 */}
         <path
           d={calculate3wayToPump1Path()}
-          className={`stroke-[12] ${shouldShowLine("tank6ToTank1") ? (isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300") : "stroke-transparent"}`}
+          className={`stroke-[12] ${isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300"}`}
           fill="none"
           strokeLinecap="round"
         />
