@@ -10,8 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/components/ui/use-toast";
-import { Toaster } from "@/components/ui/toaster";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import MqttClient from "@/lib/mqtt-client";
 
 // 모드 정의
@@ -56,8 +56,7 @@ export default function MqttControlPage() {
       onConnect: () => {
         console.log("MQTT 브로커에 연결됨");
         setIsConnected(true);
-        toast({
-          title: "MQTT 연결 성공",
+        toast.success("MQTT 연결 성공", {
           description: "MQTT 브로커에 연결되었습니다."
         });
         
@@ -67,22 +66,18 @@ export default function MqttControlPage() {
       onDisconnect: () => {
         console.log("MQTT 브로커에서 연결 해제됨");
         setIsConnected(false);
-        toast({
-          title: "MQTT 연결 해제",
-          description: "MQTT 브로커와의 연결이 해제되었습니다.",
-          variant: "destructive"
+        toast.error("MQTT 연결 해제", {
+          description: "MQTT 브로커와의 연결이 해제되었습니다."
         });
       },
-      onMessage: (topic, message) => {
+      onMessage: (topic: string, message: Buffer | string) => {
         console.log(`메시지 수신: ${topic} - ${message.toString()}`);
         // 메시지 처리 로직 추가
       },
-      onError: (error) => {
+      onError: (error: Error) => {
         console.error("MQTT 오류:", error);
-        toast({
-          title: "MQTT 오류",
-          description: `오류가 발생했습니다: ${error.message}`,
-          variant: "destructive"
+        toast.error("MQTT 오류", {
+          description: `오류가 발생했습니다: ${error.message}`
         });
       }
     });
@@ -155,10 +150,8 @@ export default function MqttControlPage() {
   // 명령 발송 함수
   const sendCommand = () => {
     if (!mqttClient || !isConnected) {
-      toast({
-        title: "연결 오류",
-        description: "MQTT 브로커에 연결되어 있지 않습니다.",
-        variant: "destructive"
+      toast.error("연결 오류", {
+        description: "MQTT 브로커에 연결되어 있지 않습니다."
       });
       return;
     }
@@ -166,10 +159,8 @@ export default function MqttControlPage() {
     const activePumps = pumpStatus.map((status, index) => status ? index + 1 : null).filter(id => id !== null);
     
     if (activePumps.length === 0) {
-      toast({
-        title: "입력 오류",
-        description: "최소 하나 이상의 펌프를 선택해야 합니다.",
-        variant: "destructive"
+      toast.error("입력 오류", {
+        description: "최소 하나 이상의 펌프를 선택해야 합니다."
       });
       return;
     }
@@ -201,16 +192,13 @@ export default function MqttControlPage() {
       // 서버에 명령 기록 저장
       saveCommandHistoryToServer(updatedHistory);
       
-      toast({
-        title: "명령 발송 성공",
+      toast.success("명령 발송 성공", {
         description: `명령이 ${topic}으로 발송되었습니다.`
       });
     } catch (error) {
       console.error("명령 발송 오류:", error);
-      toast({
-        title: "명령 발송 실패",
-        description: `오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive"
+      toast.error("명령 발송 실패", {
+        description: `오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`
       });
     }
   };
@@ -290,7 +278,7 @@ export default function MqttControlPage() {
                         min={1}
                         max={300}
                         step={1}
-                        onValueChange={(value) => setPumpRunTime(value[0])}
+                        onValueChange={(value: number[]) => setPumpRunTime(value[0])}
                       />
                       <div className="flex justify-between">
                         <span>1초</span>
@@ -315,7 +303,7 @@ export default function MqttControlPage() {
                         min={0}
                         max={300}
                         step={1}
-                        onValueChange={(value) => setWaitTime(value[0])}
+                        onValueChange={(value: number[]) => setWaitTime(value[0])}
                       />
                       <div className="flex justify-between">
                         <span>0초</span>
@@ -343,7 +331,7 @@ export default function MqttControlPage() {
                         min={1}
                         max={50}
                         step={1}
-                        onValueChange={(value) => setIndividualRepeat(value[0])}
+                        onValueChange={(value: number[]) => setIndividualRepeat(value[0])}
                       />
                       <div className="flex justify-between">
                         <span>1회</span>
@@ -368,7 +356,7 @@ export default function MqttControlPage() {
                         min={1}
                         max={50}
                         step={1}
-                        onValueChange={(value) => setTotalRepeat(value[0])}
+                        onValueChange={(value: number[]) => setTotalRepeat(value[0])}
                       />
                       <div className="flex justify-between">
                         <span>1회</span>

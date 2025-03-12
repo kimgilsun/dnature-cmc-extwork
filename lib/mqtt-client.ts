@@ -10,8 +10,22 @@ class MqttClient {
   public onMessage: (topic: string, message: string) => void = () => {};
   public onError: (error: Error) => void = () => {};
 
-  constructor() {
-    // 생성자에서는 초기화만 수행
+  constructor(options?: {
+    onConnect?: () => void;
+    onDisconnect?: () => void;
+    onMessage?: (topic: string, message: Buffer | string) => void;
+    onError?: (error: Error) => void;
+  }) {
+    // 옵션이 제공된 경우 콜백 함수 설정
+    if (options) {
+      if (options.onConnect) this.onConnect = options.onConnect;
+      if (options.onDisconnect) this.onDisconnect = options.onDisconnect;
+      if (options.onMessage) this.onMessage = (topic: string, message: string) => {
+        options.onMessage(topic, message);
+      };
+      if (options.onError) this.onError = options.onError;
+    }
+    
     // 브라우저 환경에서만 사용 가능
     if (typeof window === 'undefined') {
       console.warn("MqttClient는 브라우저 환경에서만 사용 가능합니다.");
