@@ -63,6 +63,7 @@ interface TankSystemProps {
   onPumpKCommand?: (pumpId: number) => void // K 명령 발행 함수 추가
   pumpStateMessages?: Record<number, string> // 펌프 상태 메시지
   mqttClient?: MqttClient // MQTT 클라이언트 추가
+  onExtractionCommand?: (command: string) => void // 추출 명령 함수 추가
 }
 
 // 추출 진행 메시지를 위한 인터페이스
@@ -101,7 +102,8 @@ export default function TankSystem({
   onPumpReset,
   onPumpKCommand,
   pumpStateMessages = {},
-  mqttClient
+  mqttClient,
+  onExtractionCommand
 }: TankSystemProps) {
   // 애니메이션을 위한 상태 추가
   const [fillPercentage, setFillPercentage] = useState<number>(0);
@@ -130,6 +132,11 @@ export default function TankSystem({
     source?: string
   }>>([]);
 
+  // 펌프 스위치 드래그 상태
+  const [pumpSwitchPosition, setPumpSwitchPosition] = useState<Record<number, number>>({});
+  const [draggingPump, setDraggingPump] = useState<number | null>(null);
+  const [resetTimers, setResetTimers] = useState<Record<number, NodeJS.Timeout | null>>({});
+  
   // MQTT 클라이언트 연결 상태 모니터링
   useEffect(() => {
     if (!mqttClient) return;
@@ -776,6 +783,129 @@ export default function TankSystem({
     return tankData.tanks[pumpIndex].pumpStatus === "ON" && valveCondition;
   };
 
+  // 추출 제어 명령 발행 함수
+  const handleExtractionCommand = (command: string) => {
+    if (onExtractionCommand) {
+      onExtractionCommand(command);
+      
+      // MQTT 알림 발행
+      if (mqttClient) {
+        const notification = {
+          type: 'extraction-command',
+          command,
+          timestamp: Date.now(),
+          clientId: clientId.current,
+          message: `추출 명령이 발행되었습니다: ${command}`
+        };
+        
+        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+      }
+      
+      // 클릭 효과
+      const commandElement = document.getElementById(`extraction-command-${command}`);
+      if (commandElement) {
+        commandElement.classList.add('bg-blue-200');
+        setTimeout(() => {
+          commandElement?.classList.remove('bg-blue-200');
+        }, 300);
+      }
+    }
+  };
+  
+  // 스위치 드래그 시작
+  const handlePumpSwitchStart = (pumpId: number, e: React.MouseEvent | React.TouchEvent) => {
+    setDraggingPump(pumpId);
+    document.addEventListener('mousemove', handlePumpSwitchMove);
+    document.addEventListener('touchmove', handlePumpSwitchMove);
+    document.addEventListener('mouseup', handlePumpSwitchEnd);
+    document.addEventListener('touchend', handlePumpSwitchEnd);
+  };
+  
+  // 스위치 드래그 이동
+  const handlePumpSwitchMove = (e: MouseEvent | TouchEvent) => {
+    if (!draggingPump) return;
+    
+    // 마우스 또는 터치 Y 좌표
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    // 펌프 요소의 위치 구하기
+    const pumpElement = document.getElementById(`pump-${draggingPump}`);
+    if (!pumpElement) return;
+    
+    const rect = pumpElement.getBoundingClientRect();
+    const switchHeight = 40; // 스위치 높이
+    
+    // 스위치 위치 계산 (0: 기본, -1: 위로 이동)
+    let position = 0;
+    if (clientY < rect.top - switchHeight/2) {
+      position = -1; // 위로 이동
+      
+      // 리셋 타이머 설정 (3초 후 리셋 명령)
+      if (!resetTimers[draggingPump]) {
+        console.log(`펌프 ${draggingPump} 스위치 위로 이동 - 리셋 타이머 시작`);
+        const timer = setTimeout(() => {
+          console.log(`펌프 ${draggingPump} 리셋 명령 실행`);
+          if (onPumpReset) {
+            onPumpReset(draggingPump);
+            
+            // "3" 명령 발행
+            if (mqttClient) {
+              const pumpTopic = `extwork/pump${draggingPump}/cmd`;
+              mqttClient.publish(pumpTopic, "3");
+              
+              // 알림 발행
+              const notification = {
+                type: 'pump-reset',
+                pumpId: draggingPump,
+                timestamp: Date.now(),
+                clientId: clientId.current,
+                message: `펌프 ${draggingPump} 리셋 명령(3)이 실행되었습니다.`
+              };
+              
+              mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+            }
+          }
+        }, 3000);
+        
+        setResetTimers(prev => ({...prev, [draggingPump]: timer}));
+      }
+    } else {
+      // 타이머 취소
+      if (resetTimers[draggingPump]) {
+        clearTimeout(resetTimers[draggingPump]!);
+        setResetTimers(prev => ({...prev, [draggingPump]: null}));
+      }
+    }
+    
+    setPumpSwitchPosition(prev => ({...prev, [draggingPump]: position}));
+  };
+  
+  // 스위치 드래그 종료
+  const handlePumpSwitchEnd = (e: MouseEvent | TouchEvent) => {
+    if (!draggingPump) return;
+    
+    // 이벤트 리스너 제거
+    document.removeEventListener('mousemove', handlePumpSwitchMove);
+    document.removeEventListener('touchmove', handlePumpSwitchMove);
+    document.removeEventListener('mouseup', handlePumpSwitchEnd);
+    document.removeEventListener('touchend', handlePumpSwitchEnd);
+    
+    // 타이머 취소
+    if (resetTimers[draggingPump]) {
+      clearTimeout(resetTimers[draggingPump]!);
+      setResetTimers(prev => ({...prev, [draggingPump]: null}));
+    }
+    
+    // 위치가 0이 아니면 토글 동작
+    if (pumpSwitchPosition[draggingPump] === 0 && onPumpToggle) {
+      onPumpToggle(draggingPump);
+    }
+    
+    // 위치 초기화
+    setPumpSwitchPosition(prev => ({...prev, [draggingPump]: 0}));
+    setDraggingPump(null);
+  };
+
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
       {/* 펄스 애니메이션 스타일 추가 */}
@@ -969,26 +1099,128 @@ export default function TankSystem({
           strokeLinecap="round"
         />
 
-        {/* 1번 탱크에서 2번 펌프로의 경로 */}
+        {/* 1번 펌프 (6번과 1번 탱크 사이) */}
         {(() => {
-          const pumpPos = calculatePumpPosition(0, 1);
-          const tank = tankData.tanks[1]; // 2번 펌프 = 1번 인덱스
-          const stateMessage = pumpStateMessages[2] || '';
+          const pumpPos = calculatePumpPosition(5, 0);
+          const tank = tankData.tanks[0]; // 1번 펌프 = 0번 인덱스
+          const stateMessage = pumpStateMessages[1] || '';
+          const switchPosition = pumpSwitchPosition[1] || 0;
           
           return (
-            <g key="pump-2">
+            <g key="pump-1" id="pump-1">
               <circle
                 cx={pumpPos.x}
                 cy={pumpPos.y}
                 r={pumpRadius}
-                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                className={`stroke-gray-400 stroke-2 ${draggingPump === 1 ? 'cursor-grabbing' : 'cursor-grab'}`}
                 fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                onMouseDown={() => onPumpToggle && handlePumpMouseDown(2)}
-                onMouseUp={() => onPumpToggle && handlePumpMouseUp(2)}
-                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
-                onTouchStart={() => onPumpToggle && handlePumpTouchStart(2)}
-                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(2)}
-                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+                onMouseDown={(e) => handlePumpSwitchStart(1, e)}
+                onTouchStart={(e) => handlePumpSwitchStart(1, e)}
+              />
+              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
+                IP_1
+              </text>
+              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
+                {tank.pumpStatus}
+              </text>
+              
+              {/* 펌프 스위치 표시 */}
+              <g className="transition-transform duration-300" style={{ transform: `translateY(${switchPosition * 20}px)` }}>
+                <rect 
+                  x={pumpPos.x - 20} 
+                  y={pumpPos.y - 30} 
+                  width={40} 
+                  height={15} 
+                  rx={5}
+                  className={`${tank.pumpStatus === "ON" ? "fill-green-500" : "fill-red-500"} stroke-gray-700 stroke-1`}
+                />
+                <text x={pumpPos.x} y={pumpPos.y - 20} textAnchor="middle" className="text-white text-[9px] font-bold">
+                  {switchPosition < 0 ? "리셋" : (tank.pumpStatus === "ON" ? "ON" : "OFF")}
+                </text>
+              </g>
+              
+              {/* 리셋 타이머 표시 */}
+              {resetTimers[1] && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 8}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
+              
+              {/* K 스위치 위치 조정 - 우측 상단에 고정 (소문자 k 발행) */}
+              <g 
+                className="cursor-pointer"
+                onClick={() => onPumpKCommand && onPumpKCommand(1)}
+              >
+                <circle
+                  cx={550}
+                  cy={50}
+                  r={15}
+                  className="fill-white stroke-blue-500 stroke-2"
+                />
+                <text
+                  x={550}
+                  y={54}
+                  textAnchor="middle"
+                  className="text-blue-600 font-bold text-sm"
+                >
+                  k
+                </text>
+              </g>
+              
+              {/* 상태 메시지 표시 */}
+              {stateMessage && (
+                <g>
+                  <rect
+                    x={pumpPos.x - 50}
+                    y={pumpPos.y + 25}
+                    width={100}
+                    height={20}
+                    rx="3"
+                    className="fill-gray-100 stroke-gray-300 stroke-1"
+                  />
+                  <text
+                    x={pumpPos.x}
+                    y={pumpPos.y + 38}
+                    textAnchor="middle"
+                    className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
+                  >
+                    {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
+                  </text>
+                </g>
+              )}
+              
+              {currentPressedPump === 1 && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 5}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
+            </g>
+          );
+        })()}
+
+        {/* 펌프 (2번) */}
+        {(() => {
+          const pumpPos = calculatePumpPosition(0, 1);
+          const tank = tankData.tanks[1]; // 2번 펌프 = 1번 인덱스
+          const stateMessage = pumpStateMessages[2] || '';
+          const switchPosition = pumpSwitchPosition[2] || 0;
+          
+          return (
+            <g key="pump-2" id="pump-2">
+              <circle
+                cx={pumpPos.x}
+                cy={pumpPos.y}
+                r={pumpRadius}
+                className={`stroke-gray-400 stroke-2 ${draggingPump === 2 ? 'cursor-grabbing' : 'cursor-grab'}`}
+                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
+                onMouseDown={(e) => handlePumpSwitchStart(2, e)}
+                onTouchStart={(e) => handlePumpSwitchStart(2, e)}
               />
               <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
                 IP_2
@@ -996,6 +1228,31 @@ export default function TankSystem({
               <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
                 {tank.pumpStatus}
               </text>
+              
+              {/* 펌프 스위치 표시 */}
+              <g className="transition-transform duration-300" style={{ transform: `translateY(${switchPosition * 20}px)` }}>
+                <rect 
+                  x={pumpPos.x - 20} 
+                  y={pumpPos.y - 30} 
+                  width={40} 
+                  height={15} 
+                  rx={5}
+                  className={`${tank.pumpStatus === "ON" ? "fill-green-500" : "fill-red-500"} stroke-gray-700 stroke-1`}
+                />
+                <text x={pumpPos.x} y={pumpPos.y - 20} textAnchor="middle" className="text-white text-[9px] font-bold">
+                  {switchPosition < 0 ? "리셋" : (tank.pumpStatus === "ON" ? "ON" : "OFF")}
+                </text>
+              </g>
+              
+              {/* 리셋 타이머 표시 */}
+              {resetTimers[2] && (
+                <circle
+                  cx={pumpPos.x}
+                  cy={pumpPos.y}
+                  r={pumpRadius + 8}
+                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                />
+              )}
               
               {/* 상태 메시지 표시 */}
               {stateMessage && (
@@ -1041,22 +1298,19 @@ export default function TankSystem({
             const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
             const tank = tankData.tanks[pumpNum - 1]; // 인덱스는 0부터 시작하므로 -1
             const stateMessage = pumpStateMessages[pumpNum] || '';
+            const switchPosition = pumpSwitchPosition[pumpNum] || 0;
             
             return (
-              <g key={`pump-${pumpNum}`}>
+              <g key={`pump-${pumpNum}`} id={`pump-${pumpNum}`}>
                 {/* 인버터 펌프 */}
                 <circle
                   cx={pumpPos.x}
                   cy={pumpPos.y}
                   r={pumpRadius}
-                  className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
+                  className={`stroke-gray-400 stroke-2 ${draggingPump === pumpNum ? 'cursor-grabbing' : 'cursor-grab'}`}
                   fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                  onMouseDown={() => onPumpToggle && handlePumpMouseDown(pumpNum)}
-                  onMouseUp={() => onPumpToggle && handlePumpMouseUp(pumpNum)}
-                  onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
-                  onTouchStart={() => onPumpToggle && handlePumpTouchStart(pumpNum)}
-                  onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(pumpNum)}
-                  onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
+                  onMouseDown={(e) => handlePumpSwitchStart(pumpNum, e)}
+                  onTouchStart={(e) => handlePumpSwitchStart(pumpNum, e)}
                 />
                 <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
                   IP_{pumpNum}
@@ -1064,6 +1318,31 @@ export default function TankSystem({
                 <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
                   {tank.pumpStatus}
                 </text>
+                
+                {/* 펌프 스위치 표시 */}
+                <g className="transition-transform duration-300" style={{ transform: `translateY(${switchPosition * 20}px)` }}>
+                  <rect 
+                    x={pumpPos.x - 20} 
+                    y={pumpPos.y - 30} 
+                    width={40} 
+                    height={15} 
+                    rx={5}
+                    className={`${tank.pumpStatus === "ON" ? "fill-green-500" : "fill-red-500"} stroke-gray-700 stroke-1`}
+                  />
+                  <text x={pumpPos.x} y={pumpPos.y - 20} textAnchor="middle" className="text-white text-[9px] font-bold">
+                    {switchPosition < 0 ? "리셋" : (tank.pumpStatus === "ON" ? "ON" : "OFF")}
+                  </text>
+                </g>
+                
+                {/* 리셋 타이머 표시 */}
+                {resetTimers[pumpNum] && (
+                  <circle
+                    cx={pumpPos.x}
+                    cy={pumpPos.y}
+                    r={pumpRadius + 8}
+                    className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
+                  />
+                )}
                 
                 {/* 상태 메시지 표시 */}
                 {stateMessage && (
@@ -1234,88 +1513,121 @@ export default function TankSystem({
           </text>
         </g>
 
-        {/* 1번 펌프 (6번과 1번 탱크 사이) */}
-        {(() => {
-          const pumpPos = calculatePumpPosition(5, 0);
-          const tank = tankData.tanks[0]; // 1번 펌프 = 0번 인덱스
-          const stateMessage = pumpStateMessages[1] || '';
+        {/* 5번 탱크 왼쪽에 추출 제어 버튼 추가 */}
+        <g transform={`translate(${tankPositions[4].x - 150}, ${tankPositions[4].y})`}>
+          <rect
+            x="-60"
+            y="-80"
+            width="120"
+            height="160"
+            rx="10"
+            className="fill-gray-50 stroke-gray-300 stroke-2"
+          />
+          <text
+            x="0"
+            y="-60"
+            textAnchor="middle"
+            className="text-sm font-bold fill-gray-700"
+          >
+            추출 제어
+          </text>
           
-          return (
-            <g key="pump-1">
-              <circle
-                cx={pumpPos.x}
-                cy={pumpPos.y}
-                r={pumpRadius}
-                className={`stroke-gray-400 stroke-2 ${onPumpToggle ? 'cursor-pointer' : ''}`}
-                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                onMouseDown={() => onPumpToggle && handlePumpMouseDown(1)}
-                onMouseUp={() => onPumpToggle && handlePumpMouseUp(1)}
-                onMouseLeave={() => onPumpToggle && handlePumpMouseLeave()}
-                onTouchStart={() => onPumpToggle && handlePumpTouchStart(1)}
-                onTouchEnd={() => onPumpToggle && handlePumpTouchEnd(1)}
-                onTouchCancel={() => onPumpToggle && handlePumpTouchCancel()}
-              />
-              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                IP_1
-              </text>
-              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                {tank.pumpStatus}
-              </text>
-              
-              {/* K 스위치 위치 조정 - 우측 상단에 고정 (소문자 k 발행) */}
-              <g 
-                className="cursor-pointer"
-                onClick={() => onPumpKCommand && onPumpKCommand(1)}
-              >
-                <circle
-                  cx={550}
-                  cy={50}
-                  r={15}
-                  className="fill-white stroke-blue-500 stroke-2"
-                />
-                <text
-                  x={550}
-                  y={54}
-                  textAnchor="middle"
-                  className="text-blue-600 font-bold text-sm"
-                >
-                  k
-                </text>
-              </g>
-              
-              {/* 상태 메시지 표시 */}
-              {stateMessage && (
-                <g>
-                  <rect
-                    x={pumpPos.x - 50}
-                    y={pumpPos.y + 25}
-                    width={100}
-                    height={20}
-                    rx="3"
-                    className="fill-gray-100 stroke-gray-300 stroke-1"
-                  />
-                  <text
-                    x={pumpPos.x}
-                    y={pumpPos.y + 38}
-                    textAnchor="middle"
-                    className="text-[8px] fill-gray-700 whitespace-normal overflow-ellipsis"
-                  >
-                    {stateMessage.length > 20 ? stateMessage.substring(0, 20) + '...' : stateMessage}
-                  </text>
-                </g>
-              )}
-              
-              {currentPressedPump === 1 && (
-                <circle
-                  cx={pumpPos.x}
-                  cy={pumpPos.y}
-                  r={pumpRadius + 5}
-                  className="fill-transparent stroke-yellow-400 stroke-2 animate-pulse"
-                />
-              )}
-            </g>
-          );
-        })()}
+          {/* Next 버튼 */}
+          <g 
+            id="extraction-command-next"
+            className="cursor-pointer hover:opacity-90 transition-all"
+            onClick={() => handleExtractionCommand("next")}
+          >
+            <rect
+              x="-45"
+              y="-45"
+              width="90"
+              height="30"
+              rx="5"
+              className="fill-blue-500 stroke-blue-600 stroke-1"
+            />
+            <text
+              x="0"
+              y="-27"
+              textAnchor="middle"
+              className="text-white font-bold text-sm"
+            >
+              Next
+            </text>
+          </g>
+          
+          {/* Prev 버튼 */}
+          <g 
+            id="extraction-command-prev"
+            className="cursor-pointer hover:opacity-90 transition-all"
+            onClick={() => handleExtractionCommand("prev")}
+          >
+            <rect
+              x="-45"
+              y="-5"
+              width="90"
+              height="30"
+              rx="5"
+              className="fill-amber-500 stroke-amber-600 stroke-1"
+            />
+            <text
+              x="0"
+              y="13"
+              textAnchor="middle"
+              className="text-white font-bold text-sm"
+            >
+              Prev
+            </text>
+          </g>
+          
+          {/* Resume 버튼 */}
+          <g 
+            id="extraction-command-resume"
+            className="cursor-pointer hover:opacity-90 transition-all"
+            onClick={() => handleExtractionCommand("resume")}
+          >
+            <rect
+              x="-45"
+              y="35"
+              width="90"
+              height="30"
+              rx="5"
+              className="fill-green-500 stroke-green-600 stroke-1"
+            />
+            <text
+              x="0"
+              y="53"
+              textAnchor="middle"
+              className="text-white font-bold text-sm"
+            >
+              Resume
+            </text>
+          </g>
+          
+          {/* Reset 버튼 */}
+          <g 
+            id="extraction-command-sr"
+            className="cursor-pointer hover:opacity-90 transition-all"
+            onClick={() => handleExtractionCommand("sr")}
+          >
+            <rect
+              x="-45"
+              y="75"
+              width="90"
+              height="30"
+              rx="5"
+              className="fill-red-500 stroke-red-600 stroke-1"
+            />
+            <text
+              x="0"
+              y="93"
+              textAnchor="middle"
+              className="text-white font-bold text-sm"
+            >
+              Reset
+            </text>
+          </g>
+        </g>
       </svg>
 
       {/* 추출 진행 상황 표시 하단 박스로 이동 */}
