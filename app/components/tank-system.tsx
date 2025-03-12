@@ -181,6 +181,14 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
     return false
   }
 
+  // 밸브 상태에 따라 라인 표시 여부 결정하는 함수 추가
+  const shouldShowLine = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
+    if (path === "tank6ToMain") return valve1 === 0; // 전체순환_교환 모드일 때 본탱크로의 라인 표시
+    if (path === "tank6ToTank1") return valve1 === 1; // 추출 순환일 때 1번 펌프로의 라인 표시
+    if (path === "mainToTank1") return valve2 === 1; // 2way 밸브가 열려있을 때 표시
+    return false;
+  }
+
   // 밸브 상태에 따른 파이프 색상 가져오기
   const getValvePipeColor = (path: "tank6ToMain" | "tank6ToTank1" | "mainToTank1") => {
     return isPathActive(path) ? "stroke-blue-500" : "stroke-gray-300"
@@ -511,10 +519,10 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브에서 본탱크로의 경로 */}
+        {/* 3way 밸브에서 본탱크로의 경로 - 밸브 상태에 따라 표시 여부 결정 */}
         <path
           d={calculate3wayToMainPath()}
-          className={`stroke-[12] ${(valve1 === 0 && isPipeActive(5)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${shouldShowLine("tank6ToMain") ? (isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300") : "stroke-transparent"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -535,10 +543,10 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브에서 펌프1 입구 합류 지점까지의 경로 */}
+        {/* 3way 밸브에서 펌프1 입구 합류 지점까지의 경로 - 밸브 상태에 따라 표시 여부 결정 */}
         <path
           d={calculate3wayToPump1Path()}
-          className={`stroke-[12] ${(valve1 === 1 && isPipeActive(5)) ? "stroke-blue-500" : "stroke-gray-300"}`}
+          className={`stroke-[12] ${shouldShowLine("tank6ToTank1") ? (isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300") : "stroke-transparent"}`}
           fill="none"
           strokeLinecap="round"
         />
@@ -559,104 +567,19 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           strokeLinecap="round"
         />
 
-        {/* 1번 탱크에서 2번 펌프로의 경로 */}
-        <path
-          d={calculate1ToPump2Path()}
-          className={`stroke-[12] ${tankData.tanks[1].pumpStatus === "ON" ? "stroke-blue-500" : "stroke-gray-300"}`}
-          fill="none"
-          strokeLinecap="round"
-        />
-
-        {/* 2번 펌프에서 2번 탱크로의 경로 */}
-        <path
-          d={calculatePump2To2Path()}
-          className={`stroke-[12] ${tankData.tanks[1].pumpStatus === "ON" ? "stroke-blue-500" : "stroke-gray-300"}`}
-          fill="none"
-          strokeLinecap="round"
-        />
-
-        {/* 펌프 (3~6번) - 탱크 사이에 배치 */}
-        {Array(4)
-          .fill(0)
-          .map((_, index) => {
-            const currentTankIndex = index + 1 // 2, 3, 4, 5번 탱크부터 시작
-            const nextTankIndex = (currentTankIndex + 1) % 6 // 3, 4, 5, 6번 탱크
-            const pumpPos = calculatePumpPosition(currentTankIndex, nextTankIndex)
-            const pumpNum = index + 3 // 3, 4, 5, 6번 펌프
-            const tank = tankData.tanks[pumpNum - 1] // 인덱스는 0부터 시작하므로 -1
-            
-            return (
-              <g key={`pump-${pumpNum}`}>
-                {/* 인버터 펌프 */}
-                <circle
-                  cx={pumpPos.x}
-                  cy={pumpPos.y}
-                  r={pumpRadius}
-                  className={`stroke-gray-400 stroke-2`}
-                  fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-                />
-                <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                  IP_{pumpNum}
-                </text>
-                <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                  {tank.pumpStatus}
-                </text>
-              </g>
-            )
-          })}
-
-        {/* 1번 펌프 (6번과 1번 탱크 사이) */}
-        {(() => {
-          const pumpPos = calculatePumpPosition(5, 0)
-          const tank = tankData.tanks[0] // 1번 펌프 = 0번 인덱스
-          
-          return (
-            <g key="pump-1">
-              <circle
-                cx={pumpPos.x}
-                cy={pumpPos.y}
-                r={pumpRadius}
-                className={`stroke-gray-400 stroke-2`}
-                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-              />
-              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                IP_1
-              </text>
-              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                {tank.pumpStatus}
-              </text>
-            </g>
-          )
-        })()}
-
-        {/* 2번 펌프 (1번과 2번 탱크 사이) - 추가 */}
-        {(() => {
-          const pumpPos = calculatePumpPosition(0, 1)
-          const tank = tankData.tanks[1] // 2번 펌프 = 1번 인덱스
-          
-          return (
-            <g key="pump-2">
-              <circle
-                cx={pumpPos.x}
-                cy={pumpPos.y}
-                r={pumpRadius}
-                className={`stroke-gray-400 stroke-2`}
-                fill={tank.pumpStatus === "ON" ? "#93c5fd" : "#e5e7eb"}
-              />
-              <text x={pumpPos.x} y={pumpPos.y - 5} textAnchor="middle" className="text-xs font-bold">
-                IP_2
-              </text>
-              <text x={pumpPos.x} y={pumpPos.y + 10} textAnchor="middle" className="text-xs font-bold">
-                {tank.pumpStatus}
-              </text>
-            </g>
-          )
-        })()}
-        
         {/* 탱크 1-6 */}
         {tankPositions.map((pos, index) => {
           const tankNum = index + 1
           const tank = tankData.tanks[index]
+          
+          // 1번 탱크인 경우 텍스트 박스의 위치를 조정
+          const textBoxY = tankNum === 1 
+            ? pos.y + tankHeight / 2 + 5
+            : pos.y + tankHeight / 2 + 5;
+          
+          // 1번 탱크 텍스트 박스 너비 조정
+          const textBoxWidth = tankNum === 1 ? 120 : tankWidth;
+          
           return (
             <g key={`tank-${tankNum}`}>
               {/* 탱크 */}
@@ -684,19 +607,19 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
                 {pos.label}
               </text>
               
-              {/* 탱크 상태 메시지 텍스트 박스 */}
+              {/* 탱크 상태 메시지 텍스트 박스 - 1번 탱크는 위치와 크기 조정 */}
               <g>
                 <rect
-                  x={pos.x - tankWidth / 2}
-                  y={pos.y + tankHeight / 2 + 5}
-                  width={tankWidth}
+                  x={tankNum === 1 ? pos.x - textBoxWidth / 2 : pos.x - tankWidth / 2}
+                  y={textBoxY}
+                  width={textBoxWidth}
                   height={20}
                   rx="3"
                   className="fill-gray-100 stroke-gray-300 stroke-1"
                 />
                 <text
                   x={pos.x}
-                  y={pos.y + tankHeight / 2 + 18}
+                  y={textBoxY + 13}
                   textAnchor="middle"
                   className="text-[9px] fill-gray-700"
                 >
@@ -741,9 +664,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           <text x="0" y="-30" textAnchor="middle" className="text-xs font-bold">
             3way 밸브
           </text>
-          <text x="0" y="35" textAnchor="middle" className="text-[10px]">
-            {valve1 === 1 ? "1000" : "0100/0000"}
-          </text>
           <text x="0" y={valve1 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve1 === 1 ? "ON" : "OFF"}
           </text>
@@ -785,9 +705,6 @@ export default function TankSystem({ tankData, onValveChange, progressMessages =
           {/* 밸브 텍스트 */}
           <text x="0" y="-30" textAnchor="middle" className="text-xs font-bold">
             2way 밸브
-          </text>
-          <text x="0" y="35" textAnchor="middle" className="text-[10px]">
-            {valve2 === 1 ? "0100" : "0000/1000"}
           </text>
           <text x="0" y={valve2 === 1 ? "-15" : "15"} textAnchor="middle" className="text-[10px] font-bold text-white">
             {valve2 === 1 ? "ON" : "OFF"}
