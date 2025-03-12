@@ -1007,9 +1007,9 @@ export default function TankSystem({
         })}
       </div>
       
-      <svg viewBox="0 0 1000 650" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 */}
-        <g transform="translate(0, -100) scale(0.85)">
+        <g transform="translate(0, -50) scale(0.75)">
           {/* 본탱크 - 원형에서 사각형으로 변경 및 크기 확대 */}
           <rect
             x={mainTankPosition.x - mainTankPosition.width / 2}
