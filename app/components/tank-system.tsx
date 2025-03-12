@@ -419,7 +419,7 @@ export default function TankSystem({
             L ${pump1Pos.x} ${pump1Pos.y}`;
   }
 
-  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 직접 짧게 연결하되 더 길게 보이도록
+  // 3way 밸브(밸브2)에서 펌프 1로의 경로 - 거의 펌프에 닿도록 연장
   const calculate3wayToPump1Path = () => {
     const pump1Pos = calculatePumpPosition(5, 0);
     
@@ -430,9 +430,9 @@ export default function TankSystem({
     // 벡터 길이
     const length = Math.sqrt(dx*dx + dy*dy);
     
-    // 밸브2에서 펌프1 방향으로 50% 정도 이동한 지점으로 연결 (기존 35%에서 증가)
-    const endX = valve3wayPosition.x + dx * 0.5;
-    const endY = valve3wayPosition.y + dy * 0.5;
+    // 밸브2에서 펌프1 방향으로 85% 정도 이동한 지점으로 연결 (기존 50%에서 증가)
+    const endX = valve3wayPosition.x + dx * 0.85;
+    const endY = valve3wayPosition.y + dy * 0.85;
     
     return `M ${valve3wayPosition.x} ${valve3wayPosition.y} L ${endX} ${endY}`;
   }
@@ -622,7 +622,7 @@ export default function TankSystem({
           strokeLinecap="round"
         />
 
-        {/* 3way 밸브(밸브2)에서 펌프1 입구 합류 지점까지의 경로 - 밸브 상태에 따라 표시 여부 결정 */}
+        {/* 3way 밸브(밸브2)에서 펌프 1로의 경로 - 거의 펌프에 닿도록 연장 */}
         <path
           d={calculate3wayToPump1Path()}
           className={`stroke-[12] ${shouldShowLine("tank6ToTank1") ? (isPipeActive(5) ? "stroke-blue-500" : "stroke-gray-300") : "stroke-transparent"}`}
