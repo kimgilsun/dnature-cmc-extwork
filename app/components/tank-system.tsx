@@ -938,42 +938,6 @@ export default function TankSystem({
       
       {/* 상단 컨트롤 패널 제거 */}
       
-      {/* 펌프 리셋 버튼 추가 */}
-      <div className="flex flex-wrap justify-center space-x-2 mt-2 mb-2 p-2">
-        {Array(6).fill(0).map((_, i) => {
-          const pumpId = i + 1;
-          return (
-            <button 
-              key={`pump-reset-btn-${pumpId}`}
-              className="px-3 py-1 rounded text-xs font-bold bg-black text-white hover:bg-gray-800"
-              onClick={() => {
-                if (onPumpReset) {
-                  onPumpReset(pumpId);
-                }
-                
-                if (mqttClient) {
-                  const pumpTopic = `extwork/pump${pumpId}/cmd`;
-                  mqttClient.publish(pumpTopic, "3");
-                  
-                  // 알림 발행
-                  const notification = {
-                    type: 'pump-reset',
-                    pumpId,
-                    timestamp: Date.now(),
-                    clientId: clientId.current,
-                    message: `펌프 ${pumpId} 리셋 명령(3)이 실행되었습니다.`
-                  };
-                  
-                  mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
-                }
-              }}
-            >
-              펌프{pumpId}-리셋
-            </button>
-          );
-        })}
-      </div>
-      
       <svg viewBox="0 0 1000 600" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
         {/* 전체 컨텐츠를 조정 */}
         <g transform="translate(0, -50) scale(0.75)">
@@ -1529,6 +1493,75 @@ export default function TankSystem({
 
           {/* 5번 탱크 왼쪽에 추출 제어 버튼 추가 - 위치 수정 */}
           <g transform={`translate(${tankPositions[4].x - 150}, ${tankPositions[4].y - 80})`}>
+            {/* 펌프 리셋 버튼 세로로 배치 */}
+            <g transform="translate(90, -190)">
+              <rect
+                x="-60"
+                y="-15"
+                width="120"
+                height="180"
+                rx="10"
+                className="fill-gray-50/70 stroke-gray-200 stroke-2"
+              />
+              <text
+                x="0"
+                y="-2"
+                textAnchor="middle"
+                className="text-sm font-bold fill-gray-700"
+              >
+                펌프 리셋
+              </text>
+              
+              {/* 펌프 리셋 버튼들 */}
+              {Array(6).fill(0).map((_, i) => {
+                const pumpId = i + 1;
+                return (
+                  <g 
+                    key={`pump-reset-btn-${pumpId}`}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (onPumpReset) {
+                        onPumpReset(pumpId);
+                      }
+                      
+                      if (mqttClient) {
+                        const pumpTopic = `extwork/pump${pumpId}/cmd`;
+                        mqttClient.publish(pumpTopic, "3");
+                        
+                        // 알림 발행
+                        const notification = {
+                          type: 'pump-reset',
+                          pumpId,
+                          timestamp: Date.now(),
+                          clientId: clientId.current,
+                          message: `펌프 ${pumpId} 리셋 명령(3)이 실행되었습니다.`
+                        };
+                        
+                        mqttClient.publish('tank-system/notifications', JSON.stringify(notification));
+                      }
+                    }}
+                  >
+                    <rect
+                      x="-45"
+                      y={15 + i * 25}
+                      width="90"
+                      height="20"
+                      rx="5"
+                      className="fill-black hover:fill-gray-800 stroke-gray-700 stroke-1"
+                    />
+                    <text
+                      x="0"
+                      y={30 + i * 25}
+                      textAnchor="middle"
+                      className="text-white font-bold text-sm"
+                    >
+                      펌프{pumpId}-리셋
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+
             <rect
               x="-60"
               y="-80"
@@ -1762,8 +1795,6 @@ export default function TankSystem({
             <details className="text-[9px]" open>
               <summary className="font-bold cursor-pointer mb-2">시스템 상태 정보</summary>
               <div className="bg-white p-2 rounded border border-gray-100 space-y-1 max-h-[100px] overflow-y-auto">
-                {/* 확인용 동그라미 추가 */}
-                <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500/50 border-2 border-red-600 animate-pulse"></div>
                 <div>
                   <span className="font-semibold">밸브 상태:</span> 
                   3방향 밸브: {valve1 === 1 ? `ON (${valve1Desc || "추출순환"})` : `OFF (${valve1Desc || "전체순환"})`}, 
@@ -1789,6 +1820,12 @@ export default function TankSystem({
                 </div>
                 <div>
                   <span className="font-semibold">채움 비율:</span> {fillPercentage}%
+                </div>
+                <div>
+                  <span className="font-semibold">마지막 업데이트:</span> {lastStateUpdate ? new Date(lastStateUpdate).toLocaleTimeString() : "없음"}
+                </div>
+                <div>
+                  <span className="font-semibold">연결 상태:</span> {connectionStatus.connected ? "연결됨" : "연결 끊김"}
                 </div>
               </div>
             </details>
