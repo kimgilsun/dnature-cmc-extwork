@@ -578,7 +578,7 @@ export default function TankSystem({
   // 파이프가 활성화 상태인지 확인
   const isPipeActive = (pumpIndex: number, valveCondition: boolean = true) => {
     return tankData.tanks[pumpIndex].pumpStatus === "ON" && valveCondition;
-  }
+  };
 
   return (
     <div className="relative w-full h-[850px] bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
