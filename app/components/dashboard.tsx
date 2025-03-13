@@ -43,7 +43,7 @@ const getCamStateTopic = (camNumber: number): string => {
 
 // TankSystem 컴포넌트를 동적으로 임포트
 const TankSystem = dynamic(
-  () => import('@/app/components/tank-system').catch(err => {
+  () => import('./tank-system').then(mod => mod.default).catch(err => {
     console.error('탱크 시스템 컴포넌트 로드 실패:', err);
     // 오류 발생 시 간단한 대체 컴포넌트 반환
     return () => (
@@ -183,6 +183,19 @@ export default function Dashboard() {
   const [tankSystemError, setTankSystemError] = useState<boolean>(false);
   const [tankSystemErrorMsg, setTankSystemErrorMsg] = useState<string>("");
 
+  // ErrorBoundary 컴포넌트의 오류 처리 함수
+  const handleTankSystemError = useCallback((error: Error) => {
+    console.error("탱크 시스템 오류 처리:", error);
+    setTankSystemError(true);
+    setTankSystemErrorMsg(error.message || "알 수 없는 오류");
+  }, []);
+  
+  // 탱크 시스템 오류 리셋 함수
+  const resetTankSystemError = useCallback(() => {
+    setTankSystemError(false);
+    setTankSystemErrorMsg("");
+  }, []);
+
   // 로컬 스토리지에서 이전 밸브 상태 로드
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -209,14 +222,18 @@ export default function Dashboard() {
   useEffect(() => {
     // 서버에서 초기 상태 로드
     const loadInitialState = async () => {
-      const serverState = await loadStateFromServer();
-      
-      if (serverState) {
-        console.log('서버에서 상태 로드 성공');
-        // 서버 상태로 탱크 데이터 업데이트
-        setTankData(serverState);
-      } else {
-        console.log('서버 상태 없음, 기본값 사용');
+      try {
+        const serverState = await loadStateFromServer();
+        
+        if (serverState) {
+          console.log('서버에서 상태 로드 성공');
+          // 서버 상태로 탱크 데이터 업데이트
+          setTankData(serverState);
+        } else {
+          console.log('서버 상태 없음, 기본값 사용');
+        }
+      } catch (error) {
+        console.error('초기 상태 로드 중 오류:', error);
       }
     };
     
@@ -835,8 +852,7 @@ export default function Dashboard() {
                     </div>
                     <Button
                       onClick={() => {
-                        setTankSystemError(false);
-                        setTankSystemErrorMsg("");
+                        resetTankSystemError();
                       }}
                       size="sm"
                     >
@@ -846,11 +862,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <ErrorBoundary
-                  onError={(error) => {
-                    console.error("탱크 시스템 오류:", error);
-                    setTankSystemError(true);
-                    setTankSystemErrorMsg(error.message);
-                  }}
+                  onError={handleTankSystemError}
                 >
                   <div className="relative">
                     <TankSystem 
