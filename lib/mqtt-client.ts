@@ -330,15 +330,17 @@ if (typeof window !== 'undefined') {
 // MQTT 클라이언트 생성 함수 (팩토리 함수)
 export default function createMqttClient(options?: any): IMQTTClient {
   try {
-    if (typeof window === 'undefined') {
-      console.log("서버 측 렌더링 중 더미 MQTT 클라이언트 반환");
-      return new SafeDummyMQTTClient(options);
+    // 강제로 실제 MQTT 클라이언트 사용 (더미 클라이언트 사용하지 않음)
+    if (typeof window !== 'undefined' && window) {
+      if (RealMQTTClient) {
+        console.log('실제 MQTT 클라이언트를 사용합니다.');
+        return new RealMQTTClient(options);
+      }
     }
-    
-    console.log("클라이언트 측 MQTT 클라이언트 생성 시도");
-    return new RealMQTTClient(options);
   } catch (error) {
-    console.error("MQTT 클라이언트 생성 중 오류, 더미 클라이언트 반환:", error);
-    return new SafeDummyMQTTClient(options);
+    console.error('MQTT 클라이언트 생성 중 오류:', error);
   }
+  
+  console.log('더미 MQTT 클라이언트를 대신 사용합니다.');
+  return new SafeDummyMQTTClient(options);
 } 

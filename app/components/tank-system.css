@@ -10,9 +10,45 @@
   }
 }
 
+@keyframes flow {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.flowing-pipe {
+  stroke-dasharray: 4 4;
+  animation: flow 0.5s linear infinite;
+}
+
 .tank-filling {
   animation: pulse 2s infinite;
   transition: clip-path 1.5s ease-in-out;
+}
+
+.pump-active {
+  fill: #34D399;
+  stroke: #065F46;
+  transition: all 0.3s ease;
+}
+
+.pump-inactive {
+  fill: #D1D5DB;
+  stroke: #6B7280;
+  transition: all 0.3s ease;
+}
+
+.valve-open {
+  fill: #34D399;
+  transition: fill 0.3s ease;
+}
+
+.valve-closed {
+  fill: #EF4444;
+  transition: fill 0.3s ease;
 }
 
 .legend-container {
@@ -41,4 +77,26 @@
 .legend-text {
   font-size: 12px;
   color: #4b5563;
+}
+
+/* SVG 애니메이션 관련 스타일 */
+.animate-ping {
+  animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 호버 효과 */
+.hover-trigger:hover .hover-target {
+  opacity: 0.8;
+  fill: #93C5FD;
 } 

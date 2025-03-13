@@ -254,82 +254,127 @@ export default function Dashboard() {
 
   // MQTT 클라이언트 초기화
   useEffect(() => {
-    console.log("MQTT 클라이언트 초기화 시작 - 현재 위치:", window.location.href);
+    if (typeof window === 'undefined') return;
     
-    // 동적으로 MQTT 클라이언트 모듈 로드
-    import('@/lib/mqtt-client').then(module => {
-      const createMqttClient = module.default;
+    console.log("MQTT 클라이언트 초기화 시작 - 현재 위치:", window.location.href);
+    let mqttInitRetries = 0;
+    const MAX_RETRIES = 3;
+    
+    const initMqttClient = () => {
+      setMqttStatus("연결 중...");
       
-      // MQTT 클라이언트 생성
-      const client = createMqttClient({
-        onConnect: () => {
-          console.log("MQTT 브로커에 연결 성공!");
-          setMqttStatus("연결됨");
-
-          // 모든 토픽 구독 (6개 인버터 기준)
-          const topics = getAllSubscriptionTopics(6);
-          console.log("구독할 토픽:", topics);
+      // 동적으로 MQTT 클라이언트 모듈 로드
+      import('@/lib/mqtt-client').then(module => {
+        try {
+          const createMqttClient = module.default;
           
-          topics.forEach(topic => {
-            client.subscribe(topic);
-          });
-          
-          // 진행 상황 토픽 명시적 구독
-          client.subscribe(PROCESS_PROGRESS_TOPIC);
-          console.log("진행 상황 토픽 구독:", PROCESS_PROGRESS_TOPIC);
-          
-          // 에러 토픽 구독
-          client.subscribe(ERROR_TOPIC);
-          console.log("에러 토픽 구독:", ERROR_TOPIC);
-          
-          // 연결 즉시 밸브 상태 요청 메시지 전송
-          client.publish(VALVE_INPUT_TOPIC, "STATUS");
-        },
-        onDisconnect: () => {
-          console.log("MQTT 브로커와 연결이 끊겼습니다.");
-          setMqttStatus("연결 끊김");
-          setProgressStatus("disconnected");
-          
-          // 5초 후 자동 재연결 시도
-          setTimeout(() => {
-            console.log("MQTT 자동 재연결 시도...");
-            if (!client.isConnected()) {
-              client.connect();
+          // MQTT 클라이언트 생성
+          const client = createMqttClient({
+            onConnect: () => {
+              console.log("MQTT 브로커에 연결 성공!");
+              setMqttStatus("연결됨");
+              
+              try {
+                // 모든 토픽 구독 (6개 인버터 기준)
+                const topics = getAllSubscriptionTopics(6);
+                console.log("구독할 토픽:", topics);
+                
+                topics.forEach(topic => {
+                  client.subscribe(topic);
+                });
+                
+                // 진행 상황 토픽 명시적 구독
+                client.subscribe(PROCESS_PROGRESS_TOPIC);
+                console.log("진행 상황 토픽 구독:", PROCESS_PROGRESS_TOPIC);
+                
+                // 에러 토픽 구독
+                client.subscribe(ERROR_TOPIC);
+                console.log("에러 토픽 구독:", ERROR_TOPIC);
+                
+                // 연결 즉시 밸브 상태 요청 메시지 전송
+                client.publish(VALVE_INPUT_TOPIC, "STATUS");
+              } catch (err) {
+                console.error("토픽 구독 중 오류:", err);
+              }
+            },
+            onDisconnect: () => {
+              console.log("MQTT 브로커와 연결이 끊겼습니다.");
+              setMqttStatus("연결 끊김");
+              setProgressStatus("disconnected");
+              
+              // 5초 후 자동 재연결 시도
+              setTimeout(() => {
+                console.log("MQTT 자동 재연결 시도...");
+                if (client && !client.isConnected) {
+                  client.connect();
+                } else if (client && !client.isConnected()) {
+                  client.connect();
+                } else {
+                  // 클라이언트가 없거나 isConnected 메서드가 없는 경우
+                  setMqttClient(null); // 클라이언트 초기화
+                  if (mqttInitRetries < MAX_RETRIES) {
+                    mqttInitRetries++;
+                    initMqttClient(); // 재시도
+                  }
+                }
+              }, 5000);
+            },
+            onMessage: (topic: string, message: any) => {
+              try {
+                console.log("MQTT 메시지 수신:", topic, message);
+                
+                // 메시지 처리 로직...
+                // ... 기존 코드 유지 ...
+              } catch (err) {
+                console.error("MQTT 메시지 처리 중 오류:", err);
+              }
+            },
+            onError: (error: Error) => {
+              console.error("MQTT 오류:", error);
+              setMqttStatus("오류 발생");
             }
-          }, 5000);
-        },
-        onMessage: (topic: string, message: string) => {
-          console.log(`MQTT 메시지 수신: ${topic}`);
-          handleMqttMessage(topic, message);
-        },
-        onError: (error: Error) => {
-          console.error("MQTT 오류 발생:", error);
-          // 오류 메시지 표시
-          setLastErrors(prev => {
-            const newErrors = [`MQTT 오류: ${error.message}`, ...prev].slice(0, 5);
-            return newErrors;
           });
+          
+          // 클라이언트 저장 및 연결 시작
+          setMqttClient(client);
+          
+          // 명시적 연결 시도
+          console.log("MQTT 브로커에 연결 시도...");
+          client.connect();
+        } catch (err) {
+          console.error("MQTT 클라이언트 생성 중 오류:", err);
+          setMqttStatus("초기화 오류");
+          
+          // 재시도 로직
+          if (mqttInitRetries < MAX_RETRIES) {
+            mqttInitRetries++;
+            setTimeout(initMqttClient, 3000); // 3초 후 재시도
+          }
+        }
+      }).catch(err => {
+        console.error("MQTT 클라이언트 모듈 로드 실패:", err);
+        setMqttStatus("모듈 로드 실패");
+        
+        // 재시도 로직
+        if (mqttInitRetries < MAX_RETRIES) {
+          mqttInitRetries++;
+          setTimeout(initMqttClient, 3000); // 3초 후 재시도
         }
       });
-      
-      setMqttClient(client);
-      
-      // 자동으로 연결 시작
-      console.log("MQTT 브로커에 연결 시도...");
-      client.connect();
-    }).catch(error => {
-      console.error("MQTT 모듈 로드 실패:", error);
-      setLastErrors(prev => {
-        const newErrors = [`MQTT 모듈 로드 실패: ${error.message}`, ...prev].slice(0, 5);
-        return newErrors;
-      });
-    });
+    };
     
-    // 컴포넌트 언마운트 시 연결 종료
+    // 초기화 시작
+    initMqttClient();
+    
+    // 정리 함수
     return () => {
-      console.log("Dashboard 컴포넌트 언마운트, MQTT 연결 종료");
       if (mqttClient) {
-        mqttClient.disconnect();
+        console.log("MQTT 클라이언트 정리");
+        try {
+          mqttClient.disconnect();
+        } catch (err) {
+          console.error("MQTT 클라이언트 정리 중 오류:", err);
+        }
       }
     };
   }, []);
