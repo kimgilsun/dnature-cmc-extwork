@@ -215,12 +215,21 @@ const loadFromIndexedDB = (): Promise<any> => {
           }
         } catch (error) {
           console.error('IndexedDB 스키마 업그레이드 중 오류:', error);
+          // 오류를 reject하지 않고 계속 진행
         }
       };
       
       request.onsuccess = function(event) {
         try {
           const db = request.result;
+          
+          // 객체 저장소가 존재하는지 확인
+          if (!db.objectStoreNames.contains('systemState')) {
+            console.log('systemState 객체 저장소가 없습니다');
+            db.close();
+            return resolve(null);
+          }
+          
           const transaction = db.transaction(['systemState'], 'readonly');
           const store = transaction.objectStore('systemState');
           const getRequest = store.get('currentState');
@@ -231,15 +240,17 @@ const loadFromIndexedDB = (): Promise<any> => {
             } else {
               resolve(null);
             }
+            
+            // 트랜잭션이 완료되면 DB 연결 닫기
+            transaction.oncomplete = function() {
+              db.close();
+            };
           };
           
           getRequest.onerror = function(event) {
             console.warn('IndexedDB 읽기 오류 (무시됨):', event);
-            resolve(null); // 오류를 무시하고 null 반환
-          };
-          
-          transaction.oncomplete = function() {
             db.close();
+            resolve(null); // 오류를 무시하고 null 반환
           };
         } catch (error) {
           console.warn('IndexedDB 트랜잭션 오류 (무시됨):', error);
@@ -459,29 +470,39 @@ export default function TankSystem({
   useEffect(() => {
     if (!mqttClient) return;
     
+    let isMounted = true;
+    
     const handleConnect = () => {
       console.log('MQTT 브로커에 연결됨');
+      if (!isMounted) return;
+      
       setConnectionStatus({
         connected: true,
         lastConnected: new Date(),
         reconnecting: false
       });
       
-      // 연결 시 상태 토픽 구독
-      mqttClient.subscribe('tank-system/state');
-      mqttClient.subscribe('tank-system/valve-state');
-      mqttClient.subscribe('tank-system/notifications');
-      
-      // 상태 요청 메시지 발행
-      mqttClient.publish('tank-system/request', JSON.stringify({
-        clientId: clientId.current,
-        timestamp: Date.now(),
-        requestType: 'full-state'
-      }));
+      try {
+        // 연결 시 상태 토픽 구독
+        mqttClient.subscribe('tank-system/state');
+        mqttClient.subscribe('tank-system/valve-state');
+        mqttClient.subscribe('tank-system/notifications');
+        
+        // 상태 요청 메시지 발행
+        mqttClient.publish('tank-system/request', JSON.stringify({
+          clientId: clientId.current,
+          timestamp: Date.now(),
+          requestType: 'full-state'
+        }));
+      } catch (error) {
+        console.error('MQTT 토픽 구독 중 오류:', error);
+      }
     };
     
     const handleDisconnect = () => {
       console.log('MQTT 브로커 연결 끊김');
+      if (!isMounted) return;
+      
       setConnectionStatus(prev => ({
         ...prev,
         connected: false,
@@ -498,92 +519,85 @@ export default function TankSystem({
       handleConnect();
     }
     
-    return () => {
-      mqttClient.off('connect', handleConnect);
-      mqttClient.off('disconnect', handleDisconnect);
-    };
-  }, [mqttClient]);
-  
-  // MQTT 메시지 수신 처리 개선
-  useEffect(() => {
-    if (!mqttClient) return;
-    
-    const handleMessage = (topic: string, message: Buffer) => {
+    // 메시지 핸들러 함수
+    const handleMessage = (topic: string, messageBuffer: Buffer) => {
+      if (!isMounted) return; // 마운트 해제 시 처리 중지
+      
       try {
-        // 메시지를 문자열로 변환
-        const messageStr = message.toString();
+        // 메시지 문자열로 변환
+        const messageStr = messageBuffer.toString();
+        console.log(`MQTT 메시지 수신: ${topic}`, messageStr.substring(0, 100));
         
-        // 알림 토픽 메시지 처리
-        if (topic === 'tank-system/notifications') {
+        // 메시지 처리 로직을 비동기 실행 큐로 이동
+        setTimeout(() => {
+          if (!isMounted) return; // 다시 마운트 상태 확인
+          
           try {
-            const notification = JSON.parse(messageStr);
-            
-            // 자신이 발행한 알림은 무시
-            if (notification.clientId === clientId.current) {
-              return;
-            }
-            
-            // 알림 추가
-            setNotifications(prev => {
-              const newNotifications = [...prev, {
-                id: Date.now(),
-                message: notification.message || '새 알림',
-                type: notification.type || 'info',
-                timestamp: notification.timestamp || Date.now()
-              }];
+            if (topic === 'tank-system/notifications') {
+              // 알림 메시지 처리
+              const notification = JSON.parse(messageStr);
               
-              // 최대 5개 알림만 유지
-              return newNotifications.slice(-5);
-            });
-          } catch (error) {
-            console.error('알림 메시지 파싱 오류:', error);
-          }
-        } else if (topic === 'tank-system/state') {
-          // 전체 시스템 상태 업데이트
-          try {
-            const stateUpdate = JSON.parse(messageStr);
-            
-            // 상태 업데이트 시간 기록
-            setLastStateUpdate(new Date());
-            
-            // 웹 스토리지에 상태 저장
-            saveSystemState(stateUpdate);
-            
-            // 상태 변경 알림 (다른 컴포넌트나 탭에 알림)
-            if (mqttClient) {
-              mqttClient.publish('tank-system/state-updated', JSON.stringify({
-                timestamp: Date.now(),
-                clientId: clientId.current,
-              }));
+              // 자신이 보낸 메시지는 무시
+              if (notification.clientId === clientId.current) {
+                return;
+              }
+              
+              // 알림을 최대 5개까지만 유지, 새 알림은 목록 맨 앞에 추가
+              setNotifications(prev => [
+                { message: notification.message, timestamp: Date.now(), source: notification.source },
+                ...prev
+              ].slice(0, 5));
+              
+            } else if (topic === 'tank-system/state') {
+              try {
+                // 상태 업데이트 메시지 처리
+                const stateUpdate = JSON.parse(messageStr);
+                
+                // 상태 업데이트 시간 기록
+                setLastStateUpdate(new Date());
+                
+                // 로컬 웹 스토리지에 상태 저장
+                saveSystemState(stateUpdate);
+                
+                // 상태 변경 알림 (다른 컴포넌트나 탭에 알림)
+                if (mqttClient && isMounted) {
+                  mqttClient.publish('tank-system/state-updated', JSON.stringify({
+                    timestamp: Date.now(),
+                    clientId: clientId.current,
+                  }));
+                }
+              } catch (error) {
+                console.error('상태 업데이트 처리 오류:', error);
+              }
+            } else if (topic === 'tank-system/valve-state') {
+              // 밸브 상태 업데이트
+              try {
+                const valveStateUpdate = JSON.parse(messageStr);
+                
+                if (!isMounted) return;
+                
+                // 현재 상태에 밸브 상태 병합
+                const updatedState = {
+                  ...tankData,
+                  valveState: valveStateUpdate.valveState || tankData.valveState,
+                  valveStatusMessage: valveStateUpdate.valveStatusMessage || tankData.valveStatusMessage,
+                  valveADesc: valveStateUpdate.valveADesc || tankData.valveADesc,
+                  valveBDesc: valveStateUpdate.valveBDesc || tankData.valveBDesc
+                };
+                
+                // 웹 스토리지에 업데이트된 상태 저장
+                saveSystemState(updatedState);
+                
+                // 상태 업데이트 시간 기록
+                setLastStateUpdate(new Date());
+              } catch (error) {
+                console.error('밸브 상태 업데이트 처리 오류:', error);
+              }
             }
-          } catch (error) {
-            console.error('상태 업데이트 처리 오류:', error);
+          } catch (innerError) {
+            console.error('메시지 처리 내부 오류:', innerError);
           }
-        } else if (topic === 'tank-system/valve-state') {
-          // 밸브 상태 업데이트
-          try {
-            const valveStateUpdate = JSON.parse(messageStr);
-            
-            // 현재 상태에 밸브 상태 병합
-            const updatedState = {
-              ...tankData,
-              valveState: valveStateUpdate.valveState || tankData.valveState,
-              valveStatusMessage: valveStateUpdate.valveStatusMessage || tankData.valveStatusMessage,
-              valveADesc: valveStateUpdate.valveADesc || tankData.valveADesc,
-              valveBDesc: valveStateUpdate.valveBDesc || tankData.valveBDesc
-            };
-            
-            // 웹 스토리지에 업데이트된 상태 저장
-            saveSystemState(updatedState);
-            
-            // 상태 업데이트 시간 기록
-            setLastStateUpdate(new Date());
-          } catch (error) {
-            console.error('밸브 상태 업데이트 처리 오류:', error);
-          }
-        }
-        
-        // 여기에 있던 매 메시지마다 저장하는 코드 제거
+        }, 0);
       } catch (error) {
         console.error('메시지 처리 오류:', error);
       }
@@ -593,15 +607,21 @@ export default function TankSystem({
     
     // 연결 시 최신 상태 요청
     if (mqttClient.connected) {
-      mqttClient.publish('tank-system/request', JSON.stringify({
-        clientId: clientId.current,
-        timestamp: Date.now(),
-        requestType: 'full-state'
-      }));
+      try {
+        mqttClient.publish('tank-system/request', JSON.stringify({
+          clientId: clientId.current,
+          timestamp: Date.now(),
+          requestType: 'full-state'
+        }));
+      } catch (error) {
+        console.error('상태 요청 발행 오류:', error);
+      }
     }
     
     // 다른 탭/창에서의 상태 변경 감지
     const handleStorageChange = (event: StorageEvent) => {
+      if (!isMounted) return;
+      
       if (event.key === 'tankSystemStateUpdate') {
         // 다른 탭에서 상태가 업데이트됨 - 최신 상태 로드
         const savedState = loadSystemState();
@@ -615,51 +635,74 @@ export default function TankSystem({
     window.addEventListener('storage', handleStorageChange);
     
     return () => {
+      isMounted = false;
+      
       mqttClient.off('message', handleMessage);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [mqttClient, connectionStatus.connected]); // tankData 의존성 제거
   
-  // 컴포넌트 마운트 시 저장된 상태 복원 - IndexedDB 추가
+  // 컴포넌트 마운트 시 저장된 상태 복원 - IndexedDB 추가 (useEffect 내부)
   useEffect(() => {
+    let isMounted = true;
+    
     // 로컬/세션 스토리지에서 먼저 불러오기
     const savedState = loadSystemState();
-    if (savedState && savedState.timestamp) {
+    if (savedState && savedState.timestamp && isMounted) {
       setLastStateUpdate(new Date(savedState.timestamp));
     }
     
     // IndexedDB에서도 확인 (더 최신일 수 있음)
-    loadFromIndexedDB()
-      .then(indexedDBState => {
+    const fetchFromIndexedDB = async () => {
+      try {
+        const indexedDBState = await loadFromIndexedDB();
+        
+        // 컴포넌트가 마운트 상태인지 확인
+        if (!isMounted) {
+          return;
+        }
+        
         if (indexedDBState && 
             indexedDBState.timestamp > (savedState?.timestamp || 0)) {
           // IndexedDB의 상태가 더 최신이면 사용
           setLastStateUpdate(new Date(indexedDBState.timestamp));
           
           // localStorage와 sessionStorage 업데이트
-          localStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
-          sessionStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
+          try {
+            localStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
+            sessionStorage.setItem('tankSystemState', JSON.stringify(indexedDBState));
+          } catch (storageError) {
+            console.warn('스토리지 업데이트 중 오류 (무시됨):', storageError);
+          }
         }
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('IndexedDB 상태 로드 실패:', error);
-      });
+        // 오류 발생 시 조용히 실패, UI에 영향 없음
+      }
+    };
+    
+    fetchFromIndexedDB();
     
     // 온라인 상태 변화 감지
     const handleOnlineStatusChange = () => {
-      if (window.navigator.onLine && mqttClient) {
+      if (window.navigator.onLine && mqttClient && isMounted) {
         // 온라인으로 복귀 시 최신 상태 요청
-        mqttClient.publish('tank-system/request', JSON.stringify({
-          clientId: clientId.current,
-          timestamp: Date.now(),
-          requestType: 'full-state'
-        }));
+        try {
+          mqttClient.publish('tank-system/request', JSON.stringify({
+            clientId: clientId.current,
+            timestamp: Date.now(),
+            requestType: 'full-state'
+          }));
+        } catch (mqttError) {
+          console.warn('MQTT 메시지 발행 중 오류 (무시됨):', mqttError);
+        }
       }
     };
     
     window.addEventListener('online', handleOnlineStatusChange);
     
     return () => {
+      isMounted = false;
       window.removeEventListener('online', handleOnlineStatusChange);
     };
   }, [mqttClient]);
