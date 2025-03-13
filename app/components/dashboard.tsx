@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -68,10 +68,10 @@ const TankSystem = dynamic(
 
 // 에러 바운더리 컴포넌트
 class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
+  { children: React.ReactNode; onError?: (error: Error) => void },
   { hasError: boolean; error: Error | null }
 > {
-  constructor(props: { children: React.ReactNode }) {
+  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void }) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -82,6 +82,10 @@ class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("탱크 시스템 컴포넌트 오류:", error, errorInfo);
+    // onError 콜백 호출
+    if (this.props.onError) {
+      this.props.onError(error);
+    }
   }
 
   render() {
@@ -174,6 +178,10 @@ export default function Dashboard() {
 
   // 첫 렌더링 여부 추적
   const isFirstRender = useRef(true);
+
+  // 컴포넌트 오류 상태 추가
+  const [tankSystemError, setTankSystemError] = useState<boolean>(false);
+  const [tankSystemErrorMsg, setTankSystemErrorMsg] = useState<string>("");
 
   // 로컬 스토리지에서 이전 밸브 상태 로드
   useEffect(() => {
@@ -615,34 +623,13 @@ export default function Dashboard() {
     })
   }
 
-  // 밸브 상태 변경
-  const changeValveState = (newState: string) => {
+  // 밸브 상태 변경 함수 - 무한 루프 방지를 위한 수정
+  const changeValveState = useCallback((newState: string) => {
     if (mqttClient) {
-      let mqttMessage = ""
-      
-      // 메시지 형식: "0000" - 순서대로 V1, V2, 방향1, 방향2 상태
-      switch (newState) {
-        case "valve1":
-          mqttMessage = "1000"
-          break
-        case "valve2":
-          mqttMessage = "0100"
-          break
-        case "valve_all_off":
-          mqttMessage = "0000"
-          break
-        // 추가 밸브 상태들...
-      }
-      
-      if (mqttMessage) {
-        console.log(`밸브 상태 변경: ${newState} - 메시지: ${mqttMessage}`);
-        mqttClient.publish(VALVE_INPUT_TOPIC, mqttMessage)
-        
-        // 새로운 상태를 로컬 스토리지에 바로 저장할 수도 있지만,
-        // MQTT 응답을 통해 실제 상태가 변경된 후 저장하는 것이 더 안전합니다.
-      }
+      console.log(`밸브 상태 변경: ${newState}`);
+      mqttClient.publish(VALVE_INPUT_TOPIC, newState)
     }
-  }
+  }, [mqttClient]);
 
   // 펌프 토글 (ON/OFF) 함수 추가
   const togglePump = (pumpId: number) => {
@@ -819,19 +806,75 @@ export default function Dashboard() {
                   </Button>
                 ))}
               </div>
-              <ErrorBoundary>
-                <TankSystem 
-                  tankData={tankData} 
-                  onValveChange={changeValveState}
-                  progressMessages={progressMessages}
-                  onPumpToggle={togglePump}
-                  onPumpReset={resetPump}
-                  onPumpKCommand={sendPumpKCommand}
-                  pumpStateMessages={pumpStateMessages}
-                  mqttClient={mqttClient}
-                  onExtractionCommand={sendExtractionCommand}
-                />
-              </ErrorBoundary>
+              
+              {tankSystemError ? (
+                <div className="border border-red-300 rounded-md p-6 text-center">
+                  <div className="text-xl font-semibold text-red-500 mb-2">탱크 시스템 로드 실패</div>
+                  <p className="text-gray-600 mb-3">
+                    탱크 시스템 컴포넌트에서 오류가 발생했습니다. 간소화된 버전을 로드합니다.
+                  </p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    오류 메시지: {tankSystemErrorMsg || '알 수 없는 오류'}
+                  </p>
+                  <div className="border border-gray-200 p-4 rounded-md text-left">
+                    <div className="mb-3">
+                      <strong>현재 MQTT 상태:</strong> {mqttStatus}
+                    </div>
+                    <div className="mb-3">
+                      <strong>추출 진행 메시지:</strong> {progressMessages.length ? 'O' : 'X'}
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mb-3">
+                      {tankData.tanks.map((tank) => (
+                        <div key={tank.id} className="border p-2 rounded-md">
+                          <div className="text-xs font-semibold">탱크 {tank.id}</div>
+                          <div className="text-xs">레벨: {tank.level}%</div>
+                          <div className="text-xs">상태: {tank.status}</div>
+                          <div className="text-xs">펌프: {tank.pumpStatus}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setTankSystemError(false);
+                        setTankSystemErrorMsg("");
+                      }}
+                      size="sm"
+                    >
+                      다시 시도
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <ErrorBoundary
+                  onError={(error) => {
+                    console.error("탱크 시스템 오류:", error);
+                    setTankSystemError(true);
+                    setTankSystemErrorMsg(error.message);
+                  }}
+                >
+                  <div className="relative">
+                    <TankSystem 
+                      tankData={tankData} 
+                      onValveChange={changeValveState}
+                      progressMessages={progressMessages}
+                      onPumpToggle={togglePump}
+                      onPumpReset={resetPump}
+                      onPumpKCommand={sendPumpKCommand}
+                      pumpStateMessages={pumpStateMessages}
+                      mqttClient={mqttClient}
+                      onExtractionCommand={sendExtractionCommand}
+                    />
+                    {/* 오버레이 디버깅 정보 */}
+                    {(process.env.NODE_ENV === 'development') && (
+                      <div className="absolute top-0 right-0 bg-black/70 text-white p-2 rounded-bl-md text-xs">
+                        <div>MQTT: {mqttClient ? '연결됨' : '연결안됨'}</div>
+                        <div>밸브: {tankData.valveState || 'N/A'}</div>
+                        <div>메시지: {progressMessages.length}</div>
+                      </div>
+                    )}
+                  </div>
+                </ErrorBoundary>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
