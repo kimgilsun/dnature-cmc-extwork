@@ -327,70 +327,211 @@ const pulseCss = `
   }
 `;
 
-export default function TankSystem({ 
+// 실제 컴포넌트 렌더링을 담당하는 하위 컴포넌트
+function SimpleTankSystem({ 
   tankData, 
   onValveChange, 
   progressMessages = [], 
   onPumpToggle, 
-  onPumpReset,
-  onPumpKCommand,
   pumpStateMessages = {},
-  mqttClient,
-  onExtractionCommand
+  onExtractionCommand 
 }: TankSystemProps) {
-  // 렌더링 안전성을 위한 상태 변수
-  const [renderKey, setRenderKey] = useState<number>(0);
-  const hasInitialized = useRef<boolean>(false);
-  const isMounted = useRef<boolean>(true);
+  // 밸브 상태 파싱
+  const valveState = tankData.valveState || '0000';
+  const valve1 = parseInt(valveState[0] || '0');
+  const valve2 = parseInt(valveState[1] || '0');
   
-  // 오류 처리를 위한 상태
-  const [renderError, setRenderError] = useState<{hasError: boolean, message: string | null}>({
-    hasError: false,
-    message: null
-  });
+  // 밸브 설명
+  const valve1Desc = tankData.valveADesc || (valve1 === 1 ? "추출순환" : "전체순환");
+  const valve2Desc = tankData.valveBDesc || (valve2 === 1 ? "열림" : "닫힘");
   
-  // 기본 렌더링 초기화 - 첫 렌더링 이후에만 실행
-  useEffect(() => {
-    // 컴포넌트 마운트 표시
-    isMounted.current = true;
-    
-    // 첫 렌더링 이후 초기화 상태 설정
-    if (!hasInitialized.current) {
-      try {
-        console.log('탱크 시스템 컴포넌트 초기화');
-        hasInitialized.current = true;
-        
-        // 렌더링 트리거 (이 컴포넌트를 다시 렌더링하되 이미 초기화된 상태로)
-        setTimeout(() => {
-          if (isMounted.current) {
-            setRenderKey(prev => prev + 1);
-          }
-        }, 0);
-      } catch (error) {
-        console.error('컴포넌트 초기화 오류:', error);
-        if (isMounted.current) {
-          setRenderError({
-            hasError: true, 
-            message: error instanceof Error ? error.message : '알 수 없는 오류'
-          });
-        }
-      }
+  // 간단한 상태 배경색 선택 함수
+  const getTankColor = (status: string) => {
+    switch (status) {
+      case "empty": return "bg-gray-100";
+      case "filling": return "bg-blue-200";
+      case "full": return "bg-blue-400";
+      default: return "bg-gray-100";
     }
+  };
+  
+  // 탱크 위치 계산 (간단 버전)
+  const calculateTankPosition = (index: number, total: number) => {
+    const spacing = 120; // 탱크 간 간격
+    const startX = 150; // 시작 X 좌표
+    const startY = 200; // 시작 Y 좌표
     
-    // 클린업 함수
+    return {
+      x: startX + (index * spacing),
+      y: startY + (index % 2 === 0 ? 0 : 50) // 짝수 번째 탱크는 약간 아래로
+    };
+  };
+  
+  // 안전한 밸브 상태 변경 핸들러
+  const handleValveChange = () => {
+    if (onValveChange) {
+      // 밸브 A 토글 (0->1 또는 1->0)
+      const newState = valve1 === 1 ? "0000" : "1000";
+      onValveChange(newState);
+    }
+  };
+  
+  // 안전한 추출 명령 핸들러
+  const handleExtraction = (command: string) => {
+    if (onExtractionCommand) {
+      onExtractionCommand(command);
+    }
+  };
+  
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold mb-4">탱크 시스템 (간단 버전)</h2>
+      
+      {/* 메인 탱크 */}
+      <div className="flex flex-col items-center mb-6">
+        <div className="w-40 h-32 border-2 border-gray-400 rounded-lg relative overflow-hidden">
+          <div 
+            className={`absolute bottom-0 left-0 right-0 ${getTankColor(tankData.mainTank.status)}`}
+            style={{
+              height: `${tankData.mainTank.level}%`,
+              transition: 'height 0.5s ease-in-out'
+            }}
+          ></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="font-bold">본탱크</span>
+          </div>
+          <div className="absolute bottom-1 right-1 text-xs font-bold">
+            {tankData.mainTank.level}%
+          </div>
+        </div>
+        <div className="mt-2 text-sm">
+          <span className="font-semibold">상태:</span> {tankData.mainTank.status}
+        </div>
+      </div>
+      
+      {/* 하위 탱크 그리드 */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {tankData.tanks.map((tank) => (
+          <div key={tank.id} className="flex flex-col items-center">
+            <div className="w-24 h-20 border-2 border-gray-400 rounded-lg relative overflow-hidden">
+              <div 
+                className={`absolute bottom-0 left-0 right-0 ${getTankColor(tank.status)}`}
+                style={{
+                  height: `${tank.level}%`,
+                  transition: 'height 0.5s ease-in-out'
+                }}
+              ></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-bold text-sm">탱크 {tank.id}</span>
+              </div>
+              <div className="absolute bottom-1 right-1 text-xs font-bold">
+                {tank.level}%
+              </div>
+            </div>
+            <button 
+              className={`mt-2 px-2 py-1 text-xs rounded-full ${tank.pumpStatus === "ON" ? "bg-green-500 text-white" : "bg-gray-200"}`}
+              onClick={() => onPumpToggle && onPumpToggle(tank.id)}
+            >
+              펌프 {tank.id}: {tank.pumpStatus}
+            </button>
+            {pumpStateMessages[tank.id] && (
+              <div className="mt-1 text-xs text-gray-500 max-w-[120px] truncate">
+                {pumpStateMessages[tank.id]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      
+      {/* 밸브 상태 및 제어 */}
+      <div className="flex flex-col items-center mb-6">
+        <div className="text-sm mb-2">
+          <span className="font-semibold">밸브 상태:</span> {tankData.valveState || 'N/A'}
+        </div>
+        <div className="flex gap-4">
+          <button 
+            className={`px-4 py-2 rounded-lg ${valve1 === 1 ? "bg-green-500 text-white" : "bg-gray-200"}`}
+            onClick={handleValveChange}
+          >
+            밸브 A: {valve1 === 1 ? `ON (${valve1Desc})` : `OFF (${valve1Desc})`}
+          </button>
+          <button 
+            className={`px-4 py-2 rounded-lg ${valve2 === 1 ? "bg-green-500 text-white" : "bg-gray-200"}`}
+            onClick={() => onValveChange && onValveChange(valve1 === 1 ? "1100" : "0100")}
+          >
+            밸브 B: {valve2 === 1 ? `ON (${valve2Desc})` : `OFF (${valve2Desc})`}
+          </button>
+        </div>
+      </div>
+      
+      {/* 제어 버튼 */}
+      <div className="flex justify-center gap-4 mb-6">
+        <button 
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+          onClick={() => handleExtraction("start")}
+        >
+          추출 시작
+        </button>
+        <button 
+          className="px-4 py-2 bg-red-500 text-white rounded-lg"
+          onClick={() => handleExtraction("stop")}
+        >
+          추출 중지
+        </button>
+      </div>
+      
+      {/* 진행 메시지 */}
+      {progressMessages.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h3 className="font-semibold mb-2">진행 메시지</h3>
+          <div className="max-h-40 overflow-y-auto">
+            {progressMessages.map((msg, idx) => (
+              <div key={idx} className="mb-1 text-sm border-b border-gray-100 pb-1">
+                <span className="text-gray-500 mr-2">
+                  {new Date(msg.timestamp).toLocaleTimeString()}:
+                </span>
+                {msg.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 메인 컴포넌트
+export default function TankSystem(props: TankSystemProps) {
+  // 모든 상태는 최상위 레벨에 정의
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // 첫 렌더링 후 로딩 상태 해제
+  useEffect(() => {
+    let isMounted = true;
+    
+    // 로딩 애니메이션을 위해 약간의 지연 추가
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }, 500);
+    
     return () => {
-      isMounted.current = false;
+      isMounted = false;
+      clearTimeout(timer);
     };
   }, []);
   
-  // 에러 UI
-  if (renderError.hasError) {
+  // 오류 발생 시 대체 UI
+  if (hasError) {
     return (
       <div className="border border-red-300 rounded-md p-6 text-center">
         <div className="text-xl font-semibold text-red-500 mb-2">컴포넌트 오류 발생</div>
         <p className="text-gray-600">탱크 시스템 컴포넌트에서 오류가 발생했습니다.</p>
         <p className="text-sm text-gray-500 mt-2">
-          {renderError.message || '알 수 없는 오류'}
+          {errorMessage || '알 수 없는 오류'}
         </p>
         <button
           className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -402,89 +543,33 @@ export default function TankSystem({
     );
   }
   
-  // 초기화 전에는 간단한 로딩 화면 표시
-  if (!hasInitialized.current) {
+  // 로딩 중 표시
+  if (isLoading) {
     return (
       <div className="border border-gray-200 rounded-md p-6 bg-gray-50 flex flex-col items-center justify-center min-h-[400px]">
         <div className="animate-pulse mb-4 h-8 w-8 rounded-full bg-gray-300"></div>
-        <div className="text-gray-500 font-medium">탱크 시스템 초기화 중...</div>
+        <div className="text-gray-500 font-medium">탱크 시스템 로딩 중...</div>
+        <p className="text-sm text-gray-400 mt-2">잠시만 기다려주세요...</p>
       </div>
     );
   }
   
-  // 안전하게 초기화된 후 실제 컴포넌트 렌더링
+  // 정상 렌더링 - 간소화된 컴포넌트 사용
   try {
-    // 애니메이션을 위한 상태 추가
-    const [fillPercentage, setFillPercentage] = useState<number>(0);
-    
-    // 클라이언트 ID 상태 추가
-    const clientId = useRef(generateClientId());
-    
-    // 마지막 상태 업데이트 시간
-    const [lastStateUpdate, setLastStateUpdate] = useState<Date | null>(null);
-    
-    // 상태 변경 알림을 위한 상태
-    const [notifications, setNotifications] = useState<Array<{
-      message: string,
-      timestamp: number,
-      source?: string
-    }>>([]);
-    
-    // 밸브 상태 파싱 - 렌더링 중에 오류가 발생하지 않도록 미리 계산
-    const valveInfo = useMemo(() => {
-      try {
-        if (!tankData || !tankData.valveState) {
-          return { valve1: 0, valve2: 0, valve3: 0, valve4: 0 };
-        }
-        
-        const valveArray = tankData.valveState.split('').map(v => parseInt(v) || 0);
-        return {
-          valve1: valveArray[0] || 0,
-          valve2: valveArray[1] || 0,
-          valve3: valveArray[2] || 0,
-          valve4: valveArray[3] || 0
-        };
-      } catch (e) {
-        console.error('밸브 상태 파싱 오류:', e);
-        return { valve1: 0, valve2: 0, valve3: 0, valve4: 0 };
-      }
-    }, [tankData?.valveState]);
-    
-    const { valve1, valve2, valve3, valve4 } = valveInfo;
-    
-    // 밸브 설명 파싱
-    const valveDescriptions = useMemo(() => {
-      const valve1Desc = tankData?.valveADesc || (valve1 === 1 ? "추출순환" : "전체순환");
-      const valve2Desc = tankData?.valveBDesc || (valve2 === 1 ? "열림" : "닫힘");
-      return { valve1Desc, valve2Desc };
-    }, [tankData?.valveADesc, tankData?.valveBDesc, valve1, valve2]);
-    
-    const { valve1Desc, valve2Desc } = valveDescriptions;
-    
-    // 여기에서 실제 렌더링 코드 시작
-    return (
-      <div className="relative">
-        {/* 오리지널 컴포넌트 내용 */}
-        {/* ... */}
-      </div>
-    );
+    return <SimpleTankSystem {...props} />;
   } catch (error) {
-    // 렌더링 중 발생한 오류 처리
+    // 렌더링 오류 발생 시 에러 로깅만 하고 간단한 대체 UI 표시
     console.error('탱크 시스템 렌더링 오류:', error);
-    
     return (
       <div className="border border-red-300 rounded-md p-6 text-center">
         <div className="text-xl font-semibold text-red-500 mb-2">렌더링 오류 발생</div>
-        <p className="text-gray-600">탱크 시스템 컴포넌트를 렌더링하는 중 오류가 발생했습니다.</p>
-        <p className="text-sm text-gray-500 mt-2">
-          {error instanceof Error ? error.message : '알 수 없는 오류'}
-        </p>
-        <button
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          onClick={() => window.location.reload()}
-        >
-          페이지 새로고침
-        </button>
+        <p className="text-gray-600">단순화된 버전을 표시합니다.</p>
+        <div className="mt-4 p-4 border rounded">
+          <div className="font-bold mb-2">탱크 데이터:</div>
+          <div>메인 탱크: {props.tankData.mainTank.level}% ({props.tankData.mainTank.status})</div>
+          <div>밸브 상태: {props.tankData.valveState || 'N/A'}</div>
+          <div>하위 탱크: {props.tankData.tanks.length}개</div>
+        </div>
       </div>
     );
   }
