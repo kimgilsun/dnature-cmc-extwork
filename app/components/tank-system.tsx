@@ -269,12 +269,13 @@ const loadFromIndexedDB = (): Promise<any> => {
   });
 };
 
+// Tank 인터페이스 업데이트
 interface Tank {
   id: number
   level: number
-  status: "empty" | "filling" | "full"
-  pumpStatus: "ON" | "OFF"
-  inverter: number
+  status: string
+  pumpStatus: string
+  problem?: boolean // problem 필드 추가
 }
 
 interface TankSystemProps {
@@ -327,36 +328,226 @@ const pulseCss = `
   }
 `;
 
-// 실제 컴포넌트 렌더링을 담당하는 하위 컴포넌트
-function SimpleTankSystem({ 
-  tankData, 
-  onValveChange, 
-  progressMessages = [], 
-  onPumpToggle, 
+// SimpleTankSystem 컴포넌트 수정 - SVG 기반 레이아웃 및 펌프 리셋 기능 복원
+function SimpleTankSystem({
+  tankData,
+  onValveChange,
+  progressMessages = [],
+  onPumpToggle,
+  onPumpReset,
+  onPumpKCommand,
   pumpStateMessages = {},
-  onExtractionCommand 
+  mqttClient,
+  onExtractionCommand
 }: TankSystemProps) {
-  // 밸브 상태 파싱
-  const valveState = tankData.valveState || '0000';
-  const valve1 = parseInt(valveState[0] || '0');
-  const valve2 = parseInt(valveState[1] || '0');
+  // 기존의 useState 호출들은 그대로 유지
+  const [valveState, setValveState] = useState<string>(tankData.valveState || "0000");
+  const valveInitialized = useRef(false);
+  const [mainTankFillPercentage, setMainTankFillPercentage] = useState(tankData.mainTank.level);
   
-  // 밸브 설명
-  const valve1Desc = tankData.valveADesc || (valve1 === 1 ? "추출순환" : "전체순환");
-  const valve2Desc = tankData.valveBDesc || (valve2 === 1 ? "열림" : "닫힘");
+  // 펌프 상태 관련 state들 추가 (이전 코드에서 복원)
+  const [pumpSwitchPositions, setPumpSwitchPositions] = useState<Record<number, number>>({});
+  const [resetSwitchPosition, setResetSwitchPosition] = useState<Record<number, number>>({});
+  const [isDragging, setIsDragging] = useState<Record<number, boolean>>({});
+  const [dragTimers, setDragTimers] = useState<Record<number, NodeJS.Timeout | null>>({});
+  const [resetTimers, setResetTimers] = useState<Record<number, NodeJS.Timeout | null>>({});
+  const [resetDragState, setResetDragState] = useState<Record<number, { 
+    dragging: boolean, 
+    position: number, 
+    timer: NodeJS.Timeout | null 
+  }>>({});
   
-  // 간단한 상태 배경색 선택 함수
-  const getTankColor = (status: string) => {
-    switch (status) {
-      case "empty": return "bg-gray-100";
-      case "filling": return "bg-blue-200";
-      case "full": return "bg-blue-400";
-      default: return "bg-gray-100";
+  // 펄스 효과를 위한 CSS 클래스
+  const pulseCss = "animate-pulse opacity-75";
+
+  // 밸브 상태 처리
+  const valve1 = parseInt(valveState[0]) || 0;
+  const valve2 = parseInt(valveState[1]) || 0;
+  const valve1Desc = tankData.valveADesc || "밸브 A";
+  const valve2Desc = tankData.valveBDesc || "밸브 B";
+
+  // 밸브 상태 변경 핸들러
+  const handleValveChange = useCallback(() => {
+    const newState = valve1 === 1 ? "0000" : "1000";
+    setValveState(newState);
+    onValveChange(newState);
+  }, [valve1, onValveChange]);
+
+  // 추출 명령 핸들러
+  const handleExtraction = useCallback((command: string) => {
+    if (onExtractionCommand) {
+      onExtractionCommand(command);
     }
-  };
+  }, [onExtractionCommand]);
+
+  // 펌프 드래그 시작 처리 함수
+  const handleDragStart = useCallback((pumpId: number, e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    
+    // 이미 드래그 중이면 무시
+    if (isDragging[pumpId]) return;
+    
+    // 드래그 상태 업데이트
+    setIsDragging(prev => ({...prev, [pumpId]: true}));
+    
+    // 펌프 ON 명령 발행
+    if (onPumpToggle) {
+      onPumpToggle(pumpId);
+    }
+    
+    // 타이머 설정: 1초 후에 드래그 상태 해제
+    const timer = setTimeout(() => {
+      setIsDragging(prev => ({...prev, [pumpId]: false}));
+      setDragTimers(prev => ({...prev, [pumpId]: null}));
+    }, 1000);
+    
+    // 타이머 저장
+    setDragTimers(prev => ({...prev, [pumpId]: timer}));
+  }, [isDragging, onPumpToggle]);
   
-  // 탱크 위치 계산 (간단 버전)
-  const calculateTankPosition = (index: number, total: number) => {
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      // 드래그 타이머 정리
+      Object.values(dragTimers).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+      
+      // 리셋 타이머 정리
+      Object.values(resetTimers).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+      
+      // 리셋 드래그 타이머 정리
+      Object.values(resetDragState).forEach(state => {
+        if (state.timer) clearTimeout(state.timer);
+      });
+    };
+  }, [dragTimers, resetTimers, resetDragState]);
+  
+  // 리셋 버튼 드래그 시작 처리
+  const handleResetDragStart = useCallback((pumpId: number, e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    
+    // 현재 이미 드래그 중이면 무시
+    if (resetDragState[pumpId]?.dragging) return;
+    
+    // 초기 상태 설정
+    setResetDragState(prev => ({
+      ...prev, 
+      [pumpId]: {
+        dragging: true,
+        position: 0,
+        timer: null
+      }
+    }));
+    
+    // 마우스 이동 이벤트 리스너 추가
+    document.addEventListener('mousemove', (e) => handleResetDragMove(pumpId, e));
+    document.addEventListener('touchmove', (e) => handleResetDragMove(pumpId, e), { passive: false });
+    
+    // 마우스 업 이벤트 리스너 추가
+    document.addEventListener('mouseup', () => handleResetDragEnd(pumpId));
+    document.addEventListener('touchend', () => handleResetDragEnd(pumpId));
+  }, [resetDragState]);
+  
+  // 리셋 버튼 드래그 이동 처리
+  const handleResetDragMove = useCallback((pumpId: number, e: MouseEvent | TouchEvent) => {
+    // 드래그 중이 아니면 무시
+    if (!resetDragState[pumpId]?.dragging) return;
+    
+    // 이벤트 기본 동작 방지
+    e.preventDefault();
+    
+    // 리셋 버튼 요소 찾기
+    const resetButton = document.getElementById(`reset-btn-${pumpId}`);
+    if (!resetButton) return;
+    
+    // 버튼의 위치와 크기 계산
+    const rect = resetButton.getBoundingClientRect();
+    const buttonWidth = rect.width;
+    const maxDrag = 50; // 최대 드래그 거리
+    
+    // 마우스/터치 위치 계산
+    let clientX;
+    if (e instanceof MouseEvent) {
+      clientX = e.clientX;
+    } else {
+      clientX = e.touches[0].clientX;
+    }
+    
+    // 드래그 위치 계산
+    const dragX = Math.max(0, Math.min(maxDrag, clientX - rect.left));
+    const dragPercentage = (dragX / maxDrag) * 100;
+    
+    // 드래그 상태 업데이트
+    setResetDragState(prev => ({
+      ...prev,
+      [pumpId]: {
+        ...prev[pumpId],
+        position: dragPercentage
+      }
+    }));
+    
+    // 100%에 도달하면 리셋 실행
+    if (dragPercentage >= 100 && onPumpReset) {
+      onPumpReset(pumpId);
+      
+      // 리셋 후 드래그 상태 해제
+      setResetDragState(prev => ({
+        ...prev,
+        [pumpId]: {
+          ...prev[pumpId],
+          dragging: false,
+          position: 0
+        }
+      }));
+      
+      // 이벤트 리스너 제거
+      document.removeEventListener('mousemove', (e) => handleResetDragMove(pumpId, e));
+      document.removeEventListener('touchmove', (e) => handleResetDragMove(pumpId, e));
+      document.removeEventListener('mouseup', () => handleResetDragEnd(pumpId));
+      document.removeEventListener('touchend', () => handleResetDragEnd(pumpId));
+    }
+  }, [resetDragState, onPumpReset]);
+  
+  // 리셋 버튼 드래그 종료 처리
+  const handleResetDragEnd = useCallback((pumpId: number) => {
+    // 현재 상태 가져오기
+    const currentState = resetDragState[pumpId];
+    if (!currentState) return;
+    
+    // 이벤트 리스너 제거
+    document.removeEventListener('mousemove', (e) => handleResetDragMove(pumpId, e));
+    document.removeEventListener('touchmove', (e) => handleResetDragMove(pumpId, e));
+    document.removeEventListener('mouseup', () => handleResetDragEnd(pumpId));
+    document.removeEventListener('touchend', () => handleResetDragEnd(pumpId));
+    
+    // 100%에 도달했는지 확인
+    if (currentState.position >= 100 && onPumpReset) {
+      onPumpReset(pumpId);
+    }
+    
+    // 드래그 상태 해제
+    setResetDragState(prev => ({
+      ...prev,
+      [pumpId]: {
+        dragging: false,
+        position: 0,
+        timer: null
+      }
+    }));
+  }, [resetDragState, onPumpReset, handleResetDragMove]);
+  
+  // K 명령 처리
+  const handleKCommand = useCallback((pumpId: number) => {
+    if (onPumpKCommand) {
+      onPumpKCommand(pumpId);
+    }
+  }, [onPumpKCommand]);
+
+  // 탱크 위치 계산 함수
+  const calculateTankPosition = useCallback((index: number, total: number) => {
     const spacing = 120; // 탱크 간 간격
     const startX = 150; // 시작 X 좌표
     const startY = 200; // 시작 Y 좌표
@@ -365,118 +556,279 @@ function SimpleTankSystem({
       x: startX + (index * spacing),
       y: startY + (index % 2 === 0 ? 0 : 50) // 짝수 번째 탱크는 약간 아래로
     };
-  };
+  }, []);
   
-  // 안전한 밸브 상태 변경 핸들러
-  const handleValveChange = () => {
-    if (onValveChange) {
-      // 밸브 A 토글 (0->1 또는 1->0)
-      const newState = valve1 === 1 ? "0000" : "1000";
-      onValveChange(newState);
-    }
-  };
-  
-  // 안전한 추출 명령 핸들러
-  const handleExtraction = (command: string) => {
-    if (onExtractionCommand) {
-      onExtractionCommand(command);
-    }
-  };
+  // SVG 크기 계산
+  const svgWidth = 800;
+  const svgHeight = 500;
   
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-bold mb-4">탱크 시스템 (간단 버전)</h2>
+    <div className="p-4 bg-gray-50 rounded-lg shadow-inner w-full">
+      <h2 className="text-2xl font-bold mb-6 text-center">탱크 시스템 제어</h2>
       
-      {/* 메인 탱크 */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="w-40 h-32 border-2 border-gray-400 rounded-lg relative overflow-hidden">
-          <div 
-            className={`absolute bottom-0 left-0 right-0 ${getTankColor(tankData.mainTank.status)}`}
-            style={{
-              height: `${tankData.mainTank.level}%`,
-              transition: 'height 0.5s ease-in-out'
-            }}
-          ></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="font-bold">본탱크</span>
-          </div>
-          <div className="absolute bottom-1 right-1 text-xs font-bold">
-            {tankData.mainTank.level}%
-          </div>
-        </div>
-        <div className="mt-2 text-sm">
-          <span className="font-semibold">상태:</span> {tankData.mainTank.status}
-        </div>
-      </div>
-      
-      {/* 하위 탱크 그리드 */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {tankData.tanks.map((tank) => (
-          <div key={tank.id} className="flex flex-col items-center">
-            <div className="w-24 h-20 border-2 border-gray-400 rounded-lg relative overflow-hidden">
-              <div 
-                className={`absolute bottom-0 left-0 right-0 ${getTankColor(tank.status)}`}
-                style={{
-                  height: `${tank.level}%`,
-                  transition: 'height 0.5s ease-in-out'
-                }}
-              ></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-bold text-sm">탱크 {tank.id}</span>
-              </div>
-              <div className="absolute bottom-1 right-1 text-xs font-bold">
-                {tank.level}%
-              </div>
-            </div>
-            <button 
-              className={`mt-2 px-2 py-1 text-xs rounded-full ${tank.pumpStatus === "ON" ? "bg-green-500 text-white" : "bg-gray-200"}`}
-              onClick={() => onPumpToggle && onPumpToggle(tank.id)}
-            >
-              펌프 {tank.id}: {tank.pumpStatus}
-            </button>
-            {pumpStateMessages[tank.id] && (
-              <div className="mt-1 text-xs text-gray-500 max-w-[120px] truncate">
-                {pumpStateMessages[tank.id]}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      
-      {/* 밸브 상태 및 제어 */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="text-sm mb-2">
-          <span className="font-semibold">밸브 상태:</span> {tankData.valveState || 'N/A'}
-        </div>
-        <div className="flex gap-4">
-          <button 
-            className={`px-4 py-2 rounded-lg ${valve1 === 1 ? "bg-green-500 text-white" : "bg-gray-200"}`}
-            onClick={handleValveChange}
-          >
-            밸브 A: {valve1 === 1 ? `ON (${valve1Desc})` : `OFF (${valve1Desc})`}
-          </button>
-          <button 
-            className={`px-4 py-2 rounded-lg ${valve2 === 1 ? "bg-green-500 text-white" : "bg-gray-200"}`}
-            onClick={() => onValveChange && onValveChange(valve1 === 1 ? "1100" : "0100")}
-          >
-            밸브 B: {valve2 === 1 ? `ON (${valve2Desc})` : `OFF (${valve2Desc})`}
-          </button>
-        </div>
+      {/* 메인 SVG 컨테이너 */}
+      <div className="relative w-full mb-8 overflow-x-auto">
+        <svg 
+          width={svgWidth} 
+          height={svgHeight} 
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+          className="mx-auto border border-gray-200 rounded-lg bg-white"
+        >
+          {/* 메인 탱크 */}
+          <g transform="translate(350, 50)">
+            <rect
+              x={0}
+              y={0}
+              width={100}
+              height={150}
+              rx={5}
+              className="stroke-gray-400 fill-blue-100 stroke-2"
+            />
+            
+            {/* 물 레벨 */}
+            <rect
+              x={0}
+              y={150 - (mainTankFillPercentage / 100) * 150}
+              width={100}
+              height={(mainTankFillPercentage / 100) * 150}
+              className="fill-blue-500"
+            />
+            
+            <text x={50} y={75} textAnchor="middle" className="font-bold fill-blue-800">
+              메인 탱크
+            </text>
+            
+            <text x={50} y={95} textAnchor="middle" className="fill-blue-800">
+              {mainTankFillPercentage}%
+            </text>
+          </g>
+          
+          {/* 펌프와 탱크 연결 */}
+          {tankData.tanks.map((tank, index) => {
+            const position = calculateTankPosition(index, tankData.tanks.length);
+            
+            return (
+              <g key={tank.id} transform={`translate(${position.x}, ${position.y})`}>
+                {/* 하위 탱크 */}
+                <rect
+                  x={0}
+                  y={0}
+                  width={60}
+                  height={100}
+                  rx={3}
+                  className={`stroke-gray-400 fill-blue-100 stroke-2 ${tank.problem ? 'fill-red-200' : ''}`}
+                />
+                
+                {/* 물 레벨 */}
+                <rect
+                  x={0}
+                  y={100 - (tank.level / 100) * 100}
+                  width={60}
+                  height={(tank.level / 100) * 100}
+                  className={`${tank.problem ? 'fill-red-400' : 'fill-blue-400'}`}
+                />
+                
+                <text x={30} y={20} textAnchor="middle" className="font-bold fill-blue-800 text-sm">
+                  탱크 {tank.id}
+                </text>
+                
+                <text x={30} y={40} textAnchor="middle" className="fill-blue-800 text-sm">
+                  {tank.level}%
+                </text>
+                
+                {/* 펌프 상태 표시 */}
+                <g transform="translate(0, 110)">
+                  <rect
+                    x={5}
+                    y={0}
+                    width={50}
+                    height={30}
+                    rx={3}
+                    className={`stroke-gray-400 fill-gray-100 stroke-2 ${tank.pumpStatus === "ON" ? 'fill-green-100 stroke-green-400' : ''}`}
+                  />
+                  
+                  <text
+                    x={30}
+                    y={20}
+                    textAnchor="middle"
+                    className={`text-xs ${tank.pumpStatus === "ON" ? 'fill-green-700' : 'fill-gray-500'}`}
+                  >
+                    펌프 {tank.id}
+                  </text>
+                  
+                  {/* 펌프 스위치 (드래그 가능) */}
+                  <g 
+                    key={`pump-switch-${tank.id}`}
+                    transform="translate(5, 40)"
+                    className="cursor-pointer"
+                    onMouseDown={(e) => handleDragStart(tank.id, e)}
+                    onTouchStart={(e) => handleDragStart(tank.id, e)}
+                  >
+                    {/* 스위치 배경 */}
+                    <rect
+                      x={0}
+                      y={0}
+                      width={50}
+                      height={20}
+                      rx={10}
+                      className="fill-gray-200 stroke-gray-300"
+                    />
+                    
+                    {/* 스위치 핸들 */}
+                    <circle
+                      cx={tank.pumpStatus === "ON" ? 35 : 15}
+                      cy={10}
+                      r={8}
+                      className={`${tank.pumpStatus === "ON" ? 'fill-green-500' : 'fill-gray-400'} ${isDragging[tank.id] ? pulseCss : ''}`}
+                    />
+                    
+                    <text
+                      x={tank.pumpStatus === "ON" ? 15 : 35}
+                      y={14}
+                      textAnchor="middle"
+                      className="text-[10px] fill-gray-700"
+                    >
+                      {tank.pumpStatus === "ON" ? "ON" : "OFF"}
+                    </text>
+                  </g>
+                  
+                  {/* 펌프 리셋 버튼 */}
+                  <g 
+                    key={`pump-reset-btn-${tank.id}`}
+                    id={`reset-btn-${tank.id}`}
+                    className="cursor-pointer"
+                    onMouseDown={(e) => handleResetDragStart(tank.id, e)}
+                    onTouchStart={(e) => handleResetDragStart(tank.id, e)}
+                    transform="translate(5, 70)"
+                  >
+                    {/* 리셋 스위치 배경 */}
+                    <rect
+                      x={0}
+                      y={0}
+                      width={50}
+                      height={20}
+                      rx={10}
+                      className="fill-red-100 stroke-red-300"
+                    />
+                    
+                    {/* 드래그 진행 상태 */}
+                    <rect
+                      x={0}
+                      y={0}
+                      width={resetDragState[tank.id]?.position ? (resetDragState[tank.id].position / 100) * 50 : 0}
+                      height={20}
+                      rx={10}
+                      className="fill-red-300"
+                    />
+                    
+                    <text
+                      x={25}
+                      y={14}
+                      textAnchor="middle"
+                      className="text-[10px] fill-red-700 font-semibold"
+                    >
+                      리셋
+                    </text>
+                  </g>
+                  
+                  {/* K 명령 버튼 */}
+                  {onPumpKCommand && (
+                    <g 
+                      className="cursor-pointer"
+                      onClick={() => handleKCommand(tank.id)}
+                      transform="translate(5, 100)"
+                    >
+                      <rect
+                        x={0}
+                        y={0}
+                        width={50}
+                        height={20}
+                        rx={3}
+                        className="fill-purple-100 stroke-purple-300 hover:fill-purple-200"
+                      />
+                      
+                      <text
+                        x={25}
+                        y={14}
+                        textAnchor="middle"
+                        className="text-[10px] fill-purple-700 font-semibold"
+                      >
+                        K
+                      </text>
+                    </g>
+                  )}
+                </g>
+              </g>
+            );
+          })}
+          
+          {/* 밸브 컨트롤 */}
+          <g transform="translate(600, 50)">
+            <rect
+              x={0}
+              y={0}
+              width={120}
+              height={80}
+              rx={5}
+              className="stroke-gray-400 fill-gray-100 stroke-2"
+            />
+            
+            <text x={60} y={20} textAnchor="middle" className="font-bold fill-gray-700">
+              밸브 제어
+            </text>
+            
+            {/* 밸브 A */}
+            <g transform="translate(10, 30)">
+              <circle
+                cx={15}
+                cy={15}
+                r={12}
+                className={`stroke-gray-400 stroke-2 ${valve1 === 1 ? 'fill-green-500' : 'fill-gray-200'}`}
+                onClick={handleValveChange}
+              />
+              
+              <text x={40} y={20} className="fill-gray-700 text-sm">
+                밸브 A: {valve1 === 1 ? "열림" : "닫힘"}
+              </text>
+            </g>
+            
+            {/* 밸브 B */}
+            <g transform="translate(10, 60)">
+              <circle
+                cx={15}
+                cy={15}
+                r={12}
+                className={`stroke-gray-400 stroke-2 ${valve2 === 1 ? 'fill-green-500' : 'fill-gray-200'}`}
+                onClick={() => onValveChange(valve1 === 1 ? "1100" : "0100")}
+              />
+              
+              <text x={40} y={20} className="fill-gray-700 text-sm">
+                밸브 B: {valve2 === 1 ? "열림" : "닫힘"}
+              </text>
+            </g>
+          </g>
+        </svg>
       </div>
       
       {/* 제어 버튼 */}
       <div className="flex justify-center gap-4 mb-6">
         <button 
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
           onClick={() => handleExtraction("start")}
         >
           추출 시작
         </button>
         <button 
-          className="px-4 py-2 bg-red-500 text-white rounded-lg"
+          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
           onClick={() => handleExtraction("stop")}
         >
           추출 중지
+        </button>
+        <button 
+          className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+          onClick={() => handleExtraction("reset")}
+        >
+          추출 제어 리셋
         </button>
       </div>
       
